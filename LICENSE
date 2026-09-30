@@ -20,5 +20,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Third-party components included in this repository are licensed separately
-under their own licenses; see the THIRD_PARTY.md file of the respective skill.
+Third-party components and skills by other authors included in this repository
+are NOT covered by this license and remain under their own terms; see the
+THIRD_PARTY.md file of the respective skill (e.g. skills/spec-dev).
