@@ -10,7 +10,6 @@ Claude Code читает скиллы из двух мест:
 ```bash
 git clone https://github.com/alexblag023/claude-skills.git
 ```
-Репозиторий приватный: нужен доступ коллаборатора и авторизация (`gh auth login` или токен).
 
 ## Скопировать скилл
 ```bash
