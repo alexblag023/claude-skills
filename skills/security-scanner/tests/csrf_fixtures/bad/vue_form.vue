@@ -1,0 +1,1 @@
+<template><form method="post" action="/a"></form></template>

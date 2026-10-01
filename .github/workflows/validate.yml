@@ -16,3 +16,5 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Проверка формата скиллов и утечек
         run: python3 scripts/validate_skills.py
+      - name: Регрессионные тесты линтера CSRF (security-scanner)
+        run: python3 skills/security-scanner/tests/run_csrf_lint_tests.py
