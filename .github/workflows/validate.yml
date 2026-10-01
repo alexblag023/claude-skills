@@ -20,3 +20,7 @@ jobs:
         run: python3 skills/security-scanner/tests/run_csrf_lint_tests.py
       - name: Тесты свода внешних отчётов (security-scanner)
         run: python3 skills/security-scanner/tests/run_ingest_tests.py
+      - name: Установка Semgrep (версия закреплена)
+        run: pip install --quiet semgrep==1.178.0
+      - name: Тесты собственных правил Semgrep (security-scanner)
+        run: python3 skills/security-scanner/tests/run_coverage_tests.py
