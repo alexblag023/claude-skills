@@ -46,7 +46,9 @@ def norm_severity(raw) -> str:
         return 'Info'
     if isinstance(raw, (int, float)) or re.fullmatch(r'\d+(\.\d+)?', str(raw).strip()):
         n = float(raw)
-        if n <= 5 and float(n).is_integer():           # Veracode 0..5
+        # Шкала Veracode 0..5 приходит ЦЕЛЫМ числом (JSON int); десятичные/строковые значения («4.0», 9.8) — это
+        # CVSS-подобные оценки (security-severity, riskScore): 4.0 = Medium, а не «4 = High».
+        if isinstance(raw, int) and not isinstance(raw, bool) and 0 <= n <= 5:
             return ['Info', 'Low', 'Low', 'Medium', 'High', 'Critical'][int(n)]
         return 'Critical' if n >= 9 else 'High' if n >= 7 else 'Medium' if n >= 4 else 'Low' if n > 0 else 'Info'
     s = str(raw).strip().lower().replace('_', ' ')

@@ -198,3 +198,51 @@ rules:
       - pattern: $E.printStackTrace()
       - pattern: return $E.getMessage();
       - pattern: (HttpServletResponse $R).getWriter().print($E.getMessage())
+
+  # ---- Пароли и ключи в коде (CWE-798/259/321) ----
+  - id: gap-java-hardcoded-password-var
+    languages: [java]
+    severity: ERROR
+    message: "CWE-259/798: пароль, ключ или токен задан строковым литералом. Вынесите в переменные окружения/секрет-хранилище; если значение было в git — отзовите и ротируйте."
+    metadata: {cwe: "CWE-798", owasp: "A07:2021", note: "по имени переменной; значения-заглушки (${...}, <...>, пусто) исключены"}
+    patterns:
+      - pattern-either:
+          - pattern: String $NAME = "$VAL";
+          - pattern: final String $NAME = "$VAL";
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i).*(pass(word|wd|phrase)?|pwd|secret|api_?key|token|credential|private_?key).*
+      - metavariable-regex:
+          metavariable: $VAL
+          regex: ^(?!\$\{)(?!<)(?!\*+$)(?!x+$).{4,}$
+
+  - id: gap-java-hardcoded-password-call
+    languages: [java]
+    severity: ERROR
+    message: "CWE-259/798/321: пароль или ключ передан в вызов строковым литералом (getConnection, setPassword, учётные данные, SecretKeySpec, KeyStore.load)."
+    metadata: {cwe: "CWE-798", owasp: "A07:2021"}
+    patterns:
+      - pattern-either:
+          - pattern: DriverManager.getConnection($URL, $USER, "$P")
+          - pattern: $O.setPassword("$P")
+          - pattern: new PasswordAuthentication($U, "$P".toCharArray())
+          - pattern: new UsernamePasswordCredentials($U, "$P")
+          - pattern: new SecretKeySpec("$P".getBytes(...), ...)
+          - pattern: $KS.load($IN, "$P".toCharArray())
+      - metavariable-regex:
+          metavariable: $P
+          regex: ^.{1,}$
+
+  - id: gap-java-default-credentials
+    languages: [java]
+    severity: WARNING
+    message: "CWE-798/CWE-1392: учётная запись по умолчанию (admin/admin, root/root и т.п.) зашита в код. Заведите учётные данные при установке и храните только хеши."
+    metadata: {cwe: "CWE-798", note: "эвристика: подряд два строковых аргумента — логин и совпадающий или типовой слабый пароль"}
+    patterns:
+      - pattern: $F(..., "$U", "$P", ...)
+      - metavariable-regex:
+          metavariable: $U
+          regex: ^(?i)(admin|administrator|root|user|test|guest|demo|operator)$
+      - metavariable-regex:
+          metavariable: $P
+          regex: ^(?i)(admin|administrator|root|user|test|guest|demo|password|passw0rd|pass|pass123|123456|12345678|qwerty|changeme|secret|letmein|welcome)$

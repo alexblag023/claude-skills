@@ -44,6 +44,9 @@ EXPECTED = {
     'cwe601_java_redirect.java': 'gap-java-open-redirect',
     'cwe501_java_trust_boundary.java': 'gap-java-trust-boundary-session',
     'cwe209_java_error_leak.java': 'gap-java-error-info-leak',
+    'cwe259_java_password_field.java': 'gap-java-hardcoded-password-var',
+    'cwe798_java_password_call.java': 'gap-java-hardcoded-password-call',
+    'cwe798_java_default_creds.java': 'gap-java-default-credentials',
     'cwe134_java_implicit_param.java': 'gap-java-format-string',  # неявная привязка Spring без @RequestParam
 }
 

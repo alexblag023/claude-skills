@@ -141,5 +141,7 @@ rules:
     message: "CWE-798: похоже на секрет в коде (имя переменной + строковый литерал). Вынесите в переменные окружения/секрет-хранилище; если токен был в git — отзовите."
     metadata: {cwe: "CWE-798", owasp: "A07:2021", note: "эвристика по имени; дополняет gitleaks (форматы токенов)"}
     paths:
-      include: ["*.py", "*.js", "*.ts", "*.java", "*.go", "*.rb", "*.php", "*.cs", "*.yml", "*.yaml", "*.env"]
-    pattern-regex: (?i)\b[a-z0-9_]*(password|passwd|pwd|secret|api_?key|token)[a-z0-9_]*\s*[:=]\s*['"][^'"\s]{8,}['"]
+      # Java проверяют AST-правила gaps_java.yml (gap-java-hardcoded-password-*), здесь *.java не включаем — без дублей
+      include: ["*.py", "*.js", "*.ts", "*.go", "*.rb", "*.php", "*.cs", "*.yml", "*.yaml", "*.env"]
+    # значения-заглушки (${VAR}, <...>) не считаются секретом
+    pattern-regex: (?i)\b[a-z0-9_]*(password|passwd|pwd|secret|api_?key|token)[a-z0-9_]*\s*[:=]\s*['"](?!\$\{)(?!<)[^'"\s]{8,}['"]
