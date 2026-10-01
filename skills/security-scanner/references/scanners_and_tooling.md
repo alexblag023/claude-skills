@@ -62,6 +62,7 @@
 - **Trivy** — доминирующий open-source: CVE по npm/PyPI/Maven/Go/Cargo/Composer/RubyGems/NuGet + образы + IaC + секреты. `trivy fs --scanners vuln .`, `trivy image <img>`. Численный CVSS: `trivy image --format json <img>` → `.Results[].Vulnerabilities[].CVSS.nvd.V3Score`. SARIF: `--format sarif -o trivy.sarif`.
 - **OSV-Scanner** (Google) — `osv-scanner -r .` по lock-файлам.
 - **Родные:** `npm ci` + `npm audit`, `pip-audit --require-hashes`, `govulncheck ./...`.
+- **DefectDojo** (открытый) — агрегатор находок разных сканеров; умеет импортировать CSV-выгрузку Solar appScreener (`Detailed_Results.csv`), удобно сводить внешний отчёт с нашими SARIF.
 - **Dependabot / Renovate** — авто-PR на уязвимые зависимости и обновление pinned-версий.
 - **Typosquatting / dependency confusion** (Trivy/OSV НЕ ловят): **OSSF Scorecard** `scorecard --repo=<repo>`, Socket.dev, private-registry scoping (`.npmrc` с явным `registry=`), ручной allow-list имён при code review.
 - ⚠️ Open-source SCA (Trivy/OSV/Grype) **не делают reachability-анализ** (достижима ли уязвимая функция) — это моат коммерческих (Snyk/Mend). «Нет CVE в скане» ≠ «код не уязвим».
@@ -185,6 +186,7 @@ steps:
 Что делать в каждом аудите веб-объекта (пруф каждого пункта — вывод команды):
 - **CSRF в шаблонах:** `python scripts/csrf_template_lint.py <корень>` → 0. Починка: токен-middleware + `{{ csrf_token }}` в формах + `hx-headers` на `<body>` (для htmx) — и оставить Origin-гвард как второй слой.
 - **Покрытие и пределы линтера** (регрессионные тесты: `python tests/run_csrf_lint_tests.py`, фикстуры `tests/csrf_fixtures/`): html/jinja/twig/ejs/hbs/blade/erb/php/cshtml, jsx/tsx/vue/svelte; хелперы токена Django/Flask-WTF/Laravel/Rails/ASP.NET; глобальный токен в `hx-headers` на `<body>` layout покрывает partial-шаблоны; для JS (`fetch`/axios/`$.post`/XHR) — только эвристика уровня файла; `*.min.js` пропускаются. Не видит: формы, собираемые строками в JS, и токен, который подставляет только серверный middleware без следа в разметке (это и есть цель проверки). Находка линтера = `FAIL` слоя SAST; регрессию линтера ловит CI репозитория скилла.
+- **Профили внешних сканеров принимающей стороны** (как они «видят» код, форматы выгрузки, чек-лист подготовки, что запросить у принимающей стороны) — `external_sast_profiles.md` (сейчас: Solar appScreener).
 - **Принцип общий:** для каждого класса, где защита реализована «невидимо» (middleware, прокси, WAF, конфиг), задай вопрос: «увидит ли это сигнатурный сканер по исходнику?». Если нет — добавь видимый след (токен в разметке, явный декоратор `@csrf_protect`, явный `secure=True/httponly=True` в коде cookie, явный `autoescape=True`, явный `verify=True`) либо зафиксируй как `MANUAL`: «обосновать принимающей стороне/отклонить находку внешнего SAST с ссылкой на гвард» — не молча PASS.
 - **Экспортированный отчёт внешнего SAST может быть отфильтрован** (например, только High из полного списка). Medium/Low того же скана нужно запрашивать отдельно — не считать «чисто».
 - **Триаж принимающей стороны обычно окончателен:** отклонять находку аргументом «у нас есть middleware» нельзя; закрывается правкой шаблона.
