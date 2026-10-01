@@ -1,0 +1,3 @@
+Category,Friority,Path,Line
+Cross-Site Request Forgery,High,web/forms.py,14
+Log Forging,Low,web/log.py,2

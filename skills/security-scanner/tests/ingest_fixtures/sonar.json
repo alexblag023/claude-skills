@@ -1,0 +1,51 @@
+{
+ "total": 2,
+ "issues": [
+  {
+   "key": "A1",
+   "rule": "python:S3649",
+   "severity": "BLOCKER",
+   "type": "VULNERABILITY",
+   "component": "proj:app/db.py",
+   "line": 20,
+   "message": "SQL injection",
+   "issueStatus": "OPEN",
+   "tags": [
+    "cwe",
+    "sql"
+   ],
+   "impacts": [
+    {
+     "softwareQuality": "SECURITY",
+     "severity": "HIGH"
+    }
+   ]
+  },
+  {
+   "key": "A2",
+   "rule": "python:S1",
+   "severity": "MAJOR",
+   "component": "proj:app/z.py",
+   "line": 2,
+   "message": "x",
+   "issueStatus": "FALSE_POSITIVE",
+   "impacts": [
+    {
+     "softwareQuality": "MAINTAINABILITY",
+     "severity": "MEDIUM"
+    }
+   ]
+  }
+ ],
+ "hotspots": [
+  {
+   "ruleKey": "python:S4502",
+   "securityCategory": "csrf",
+   "vulnerabilityProbability": "HIGH",
+   "status": "TO_REVIEW",
+   "component": "proj:app/settings.py",
+   "line": 33,
+   "message": "Disabling CSRF protections is security-sensitive"
+  }
+ ]
+}

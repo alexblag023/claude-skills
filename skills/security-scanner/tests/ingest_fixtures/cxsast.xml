@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CxXMLResults>
+ <Query id="1" cweId="352" name="CSRF" group="Java_Medium_Threat" Severity="Medium" Language="Java">
+  <Result NodeId="1" FileName="web/A.java" Line="10" Status="Recurrent" FalsePositive="False" Severity="Medium"/>
+  <Result NodeId="2" FileName="web/B.java" Line="11" Status="Recurrent" FalsePositive="True" Severity="Medium"/>
+ </Query>
+ <Query id="2" cweId="89" name="SQL_Injection" Severity="High">
+  <Result NodeId="3" FileName="web/C.java" Line="5" Status="New" FalsePositive="False" Severity="High"/>
+ </Query>
+</CxXMLResults>

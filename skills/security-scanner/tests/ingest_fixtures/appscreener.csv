@@ -1,0 +1,3 @@
+Vulnerability,Description,Recommendations,Links,Severity Level,File,Line
+"Межсайтовая подделка запроса (CSRF)",d,r,l,Высокий,orchestrator/web/templates/index.html,118
+"Внедрение пути",d,r,l,Низкий,orchestrator/x.py,5
