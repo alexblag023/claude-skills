@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Проверка собственных правил Semgrep (rules/semgrep/gaps.yml) на корпусе уязвимых и безопасных примеров.
+"""Проверка собственных правил Semgrep (rules/semgrep/gaps.yml и gaps_java.yml) на корпусе уязвимых и безопасных примеров.
 
  - tests/vuln_corpus/       — намеренно уязвимые примеры, по файлу на класс (имя файла = CWE-класс)
  - tests/vuln_corpus_safe/  — безопасные эквиваленты: правила НЕ должны срабатывать
@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-RULES = HERE.parent / 'rules' / 'semgrep' / 'gaps.yml'
+RULES = [HERE.parent / 'rules' / 'semgrep' / 'gaps.yml', HERE.parent / 'rules' / 'semgrep' / 'gaps_java.yml']
 BAD, SAFE = HERE / 'vuln_corpus', HERE / 'vuln_corpus_safe'
 
 # файл корпуса -> правило gaps.yml, которое обязано сработать
@@ -33,6 +33,18 @@ EXPECTED = {
     'cwe611_xxe.py': 'gap-xxe-lxml-resolve-entities',
     'cwe798_hardcoded_secret.py': 'gap-hardcoded-secret-assignment',
     'cwe862_missing_authz.py': 'gap-flask-admin-route-without-auth',
+    # Java/Spring (gaps_java.yml)
+    'cwe078_java_exec.java': 'gap-java-exec-shell-dynamic',
+    'cwe079_java_xss_responsebody.java': 'gap-java-xss-responsebody',
+    'cwe113_java_crlf.java': 'gap-java-crlf-header-cookie',
+    'cwe117_java_logforging.java': 'gap-java-log-forging',
+    'cwe134_java_format.java': 'gap-java-format-string',
+    'cwe330_java_random.java': 'gap-java-insecure-random',
+    'cwe470_java_reflection.java': 'gap-java-unsafe-reflection',
+    'cwe601_java_redirect.java': 'gap-java-open-redirect',
+    'cwe501_java_trust_boundary.java': 'gap-java-trust-boundary-session',
+    'cwe209_java_error_leak.java': 'gap-java-error-info-leak',
+    'cwe134_java_implicit_param.java': 'gap-java-format-string',  # неявная привязка Spring без @RequestParam
 }
 
 
@@ -44,7 +56,7 @@ def scan(semgrep: str, target: Path) -> dict:
         work = Path(tmp) / 'corpus'
         shutil.copytree(target, work, ignore=shutil.ignore_patterns('_*', '__pycache__'))
         out = Path(tmp) / 'out.json'
-        p = subprocess.run([semgrep, 'scan', '--config', str(RULES), '--json', '--output', str(out), '--metrics=off',
+        p = subprocess.run([semgrep, 'scan', *[a for r in RULES for a in ('--config', str(r))], '--json', '--output', str(out), '--metrics=off',
                             '--disable-version-check', '--quiet', str(work)],
                            capture_output=True, text=True, encoding='utf-8', env={**os.environ, 'PYTHONUTF8': '1'})
         if not out.exists():
