@@ -57,11 +57,41 @@
 |---|---|---|
 | Prompt injection, избыточные полномочия агента, небезопасные вызовы инструментов (CWE-77, 285; OWASP LLM) | чек-лист `sc-ai-agent-safety.md`; для самих скиллов — ревью вклада по `docs/review-checklist.md` репозитория скиллов | ▲ |
 
+## Бенчмарк на реальном уязвимом Java-приложении (veracode/verademo, MIT)
+Прогон 2026-10-01: Spring Boot, 52 файла (Java + JSP), авторская разметка заложенных уязвимостей (`docs/flaws/`, 14 классов) и настоящий результат Veracode Pipeline Scan (`docs/scan_results/results.json`, 225 находок).
+
+| Заложенный класс (CWE) | Semgrep, реестровые правила | + наши `gaps*.yml` | Veracode |
+|---|---|---|---|
+| 89 SQL injection | ✔ | ✔ | ✔ |
+| 73 Path traversal / имя файла | ✔ | ✔ | ✔ |
+| 327 Слабая криптография | ✔ | ✔ | ✔ |
+| 502 Небезопасная десериализация | ✔ | ✔ | ✔ |
+| 78 Внедрение команд ОС | — | ✔ | ✔ |
+| 80 XSS | — | ✔ | ✔ |
+| 117 Log forging | — | ✔ | ✔ |
+| 113 HTTP response splitting / CRLF | — | ✔ | ✔ |
+| 470 Unsafe reflection | — | ✔ | ✔ |
+| 601 Open redirect | — | ✔ | — |
+| 134 Format string | — | ✔ | — |
+| 200 Information exposure (через ошибки) | — | ✔ | — |
+| 384 Session fixation | — | — | — |
+| 501 Trust boundary violation | — | — | — |
+| **Итого из 14** | **4** | **12** | **9** |
+
+Что показал бенчмарк:
+- **Реестровые правила Semgrep OSS пропустили самое очевидное** (внедрение команд `Runtime.exec(new String[]{"bash","-c","ping " + host})`, XSS, CRLF, reflection): уязвимости завязаны на Spring MVC. Мы добавили правила `rules/semgrep/gaps_java.yml`; на Verademo внедрение команд находится ровно на тех же строках, что у Veracode (`ToolsController.java:53, :83`), SQL injection — на всех 14 местах.
+- **Пределы Semgrep OSS** (причины пропусков, не «слабость модели»): taint работает только внутри одного метода (источник в контроллере и `exec` во вспомогательном методе → нужно правило по приёмнику); типизированный шаблон `(Runtime $R)` не сопоставляется с цепочкой `Runtime.getRuntime().exec(...)` (нужна буквальная форма); неявная привязка параметров Spring без `@RequestParam` не считается источником (добавлена отдельно); `focus-metavariable` в списке sink'ов обязан быть внутри `patterns:`.
+- **Не закрыто**: CWE-384 и CWE-501 — логические (вход после регистрации, переиспользование сессии); синтаксическими правилами не ловятся, нужен ручной разбор/чек-листы `sc-authentication.md`.
+- **Veracode нашёл больше классов сверх разметки** (hardcoded credentials 798 ×28, resource leak 404, J2EE bad practices 245, insufficient entropy 331): часть из них наши правила не закрывают (404/245/798 в Java).
+- Наши правила — эвристики: в Verademo они дают 45 срабатываний (в основном log forging и утечки через ошибки — WARNING); на безопасных эквивалентах (`tests/vuln_corpus_safe/`) — 0 ложных.
+
+Воспроизведение: `git clone https://github.com/veracode/verademo`; `semgrep scan --config p/java --config p/security-audit --config p/owasp-top-ten --config p/command-injection --config p/sql-injection --config p/xss app` и `semgrep scan --config <скил>/rules/semgrep/gaps_java.yml app`; сверка с `docs/scan_results/results.json` — `scripts/ingest_external_report.py`.
+
 ## Что даёт бандл скила и что требует установки
 - В скиле (тестируется): `csrf_template_lint.py`, `rules/semgrep/gaps.yml`, `ingest_external_report.py`.
 - IaC/Dockerfile: KICS (Checkmarx) прогнан на `tests/iac_corpus/` (Dockerfile, Pod, Terraform) — 37 находок, из них 6 High/Critical (S3 ACL public-read, privileged-контейнер, root, SSH 0.0.0.0/0); Checkov/hadolint/Trivy config не прогонялись.
 - Нужно ставить отдельно: Semgrep (правила реестра подтягиваются из сети, `--metrics=off`), bandit, gitleaks, Trivy. Без них класс переходит в ✗ — сообщайте «не проверено», а не PASS.
-- Языки корпуса: Python, JavaScript, C, Dockerfile, HTML-шаблоны. Java, C#, PHP, Go, Ruby и др. **не проверялись**.
+- Языки корпуса: Python, JavaScript, C, Java (Spring), Dockerfile, IaC, HTML-шаблоны. Java проверена ещё и на реальном приложении (бенчмарк выше). C#, PHP, Go, Ruby и др. **не проверялись**.
 - Не проверялись: межфайловый taint, DAST (ZAP/Nuclei), SCA, секреты в истории.
 
 ## Как расширять

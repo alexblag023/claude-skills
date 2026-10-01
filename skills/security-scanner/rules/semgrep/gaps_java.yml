@@ -1,0 +1,200 @@
+rules:
+  # Java/Spring: taint-правила с источниками Spring MVC и Servlet API. Закрывают классы, которые реестровые
+  # правила Semgrep OSS (p/java, p/security-audit, p/owasp-top-ten, p/command-injection) НЕ нашли на уязвимом
+  # приложении veracode/verademo (MIT): внедрение команд, open redirect, unsafe reflection, format string,
+  # CRLF в заголовках/cookie, log forging, XSS через @ResponseBody, слабый ГПСЧ.
+  # Правила общие (без привязки к именам из verademo); общий набор источников задан якорем &src.
+
+  - id: gap-java-os-command-injection
+    mode: taint
+    languages: [java]
+    severity: ERROR
+    message: "CWE-78: данные запроса попадают в Runtime.exec/ProcessBuilder. Не собирайте команду из ввода: фиксированная команда + аргументы из allow-list, без `bash -c`."
+    metadata: {cwe: "CWE-78", owasp: "A03:2021"}
+    pattern-sources: &src
+      - patterns:
+          - pattern-either:
+              - pattern: $M(..., @RequestParam(...) $T $SRC, ...) { ... }
+              - pattern: $M(..., @PathVariable(...) $T $SRC, ...) { ... }
+              - pattern: $M(..., @RequestBody $T $SRC, ...) { ... }
+              - pattern: $M(..., @RequestHeader(...) $T $SRC, ...) { ... }
+              - pattern: $M(..., @RequestParam $T $SRC, ...) { ... }
+              - pattern: $M(..., @PathVariable $T $SRC, ...) { ... }
+          - focus-metavariable: $SRC
+      # неявная привязка Spring: параметр String обработчика @RequestMapping/@GetMapping/... без @RequestParam
+      - patterns:
+          - pattern-either:
+              - pattern: |
+                  @RequestMapping(...)
+                  $R $M(..., String $SRC, ...) { ... }
+              - pattern: |
+                  @GetMapping(...)
+                  $R $M(..., String $SRC, ...) { ... }
+              - pattern: |
+                  @PostMapping(...)
+                  $R $M(..., String $SRC, ...) { ... }
+          - focus-metavariable: $SRC
+      - pattern: (HttpServletRequest $R).getParameter(...)
+      - pattern: (HttpServletRequest $R).getHeader(...)
+      - pattern: (HttpServletRequest $R).getQueryString()
+      - pattern: (HttpServletRequest $R).getRequestURI()
+    pattern-sinks:
+      # типизированный шаблон (Runtime $R) не сопоставляется с цепочкой Runtime.getRuntime().exec(...) — нужна буквальная форма
+      - pattern: Runtime.getRuntime().exec(...)
+      - pattern: (Runtime $RT).exec(...)
+      - pattern: new ProcessBuilder(...)
+    pattern-sanitizers:
+      - pattern: (Integer).parseInt(...)
+      - pattern: (Long).parseLong(...)
+
+  - id: gap-java-open-redirect
+    mode: taint
+    languages: [java]
+    severity: WARNING
+    message: "CWE-601 open redirect: адрес перенаправления берётся из запроса. Допускайте только относительные пути или allow-list хостов."
+    metadata: {cwe: "CWE-601", owasp: "A01:2021", note: "по политике скила не блокер без высокой уверенности"}
+    pattern-sources: *src
+    pattern-sinks:
+      - pattern: return "redirect:" + $X;
+      - pattern: return "redirect:" + $X + ...;
+      - pattern: (HttpServletResponse $R).sendRedirect(...)
+      - pattern: new RedirectView(...)
+
+  - id: gap-java-unsafe-reflection
+    mode: taint
+    languages: [java]
+    severity: ERROR
+    message: "CWE-470 unsafe reflection: имя класса собирается из данных запроса. Выбирайте класс по allow-list/enum, а не по строке пользователя."
+    metadata: {cwe: "CWE-470", owasp: "A03:2021"}
+    pattern-sources: *src
+    pattern-sinks:
+      - pattern: Class.forName(...)
+      - pattern: (ClassLoader $L).loadClass(...)
+
+  - id: gap-java-format-string
+    mode: taint
+    languages: [java]
+    severity: WARNING
+    message: "CWE-134: пользовательские данные в формат-строке String.format/printf. Передавайте ввод аргументом, а не частью формата."
+    metadata: {cwe: "CWE-134"}
+    pattern-sources: *src
+    pattern-sinks:
+      # focus-metavariable обязан быть внутри patterns:, иначе сигналом считается любой аргумент вызова
+      - patterns:
+          - pattern: String.format($FMT, ...)
+          - focus-metavariable: $FMT
+      - patterns:
+          - pattern: (PrintStream $P).printf($FMT, ...)
+          - focus-metavariable: $FMT
+
+  - id: gap-java-crlf-header-cookie
+    mode: taint
+    languages: [java]
+    severity: WARNING
+    message: "CWE-113/CWE-93: данные запроса попадают в заголовок ответа или имя/значение cookie без нейтрализации CRLF."
+    metadata: {cwe: "CWE-113", owasp: "A03:2021"}
+    pattern-sources: *src
+    pattern-sinks:
+      - pattern: (HttpServletResponse $R).addHeader($H, $V)
+      - pattern: (HttpServletResponse $R).setHeader($H, $V)
+      - pattern: new Cookie($N, $V)
+
+  - id: gap-java-log-forging
+    mode: taint
+    languages: [java]
+    severity: WARNING
+    message: "CWE-117 log forging: данные запроса пишутся в лог без экранирования CR/LF. Нейтрализуйте управляющие символы (в идеале — централизованно в логгере)."
+    metadata: {cwe: "CWE-117", owasp: "A09:2021", note: "требование Z4: экранирование управляющих символов в логах"}
+    pattern-sources: *src
+    pattern-sinks:
+      - pattern: (Logger $L).$M(...)
+      - pattern: (org.slf4j.Logger $L).$M(...)
+    pattern-sanitizers:
+      - pattern: (String $S).replaceAll(...)
+
+  - id: gap-java-xss-responsebody
+    mode: taint
+    languages: [java]
+    severity: ERROR
+    message: "CWE-79 XSS: данные запроса возвращаются клиентом как тело ответа (@ResponseBody) без кодирования. Применяйте HtmlUtils.htmlEscape/шаблонизатор с автоэкранированием."
+    metadata: {cwe: "CWE-79", owasp: "A03:2021"}
+    pattern-sources: *src
+    pattern-sinks:
+      - patterns:
+          - pattern: return $X;
+          - pattern-inside: |
+              @ResponseBody
+              $T $M(...) { ... }
+      - pattern: (HttpServletResponse $R).getWriter().print(...)
+      - pattern: (HttpServletResponse $R).getWriter().println(...)
+      - pattern: (HttpServletResponse $R).getWriter().write(...)
+    pattern-sanitizers:
+      - pattern: HtmlUtils.htmlEscape(...)
+      - pattern: StringEscapeUtils.escapeHtml4(...)
+      - pattern: (Integer).parseInt(...)
+
+  - id: gap-java-insecure-random
+    languages: [java]
+    severity: WARNING
+    message: "CWE-330/CWE-331: java.util.Random не криптостоек. Для токенов, паролей, идентификаторов сессий используйте SecureRandom."
+    metadata: {cwe: "CWE-330", owasp: "A02:2021", note: "эвристика: срабатывает на любое использование Random, проверьте назначение"}
+    pattern-either:
+      - pattern: new java.util.Random(...)
+      - pattern: new Random(...)
+      - pattern: Math.random()
+
+  - id: gap-jsp-js-dom-xss-append
+    languages: [generic]
+    severity: WARNING
+    message: "CWE-79 DOM XSS: ответ сервера вставляется в DOM через jQuery .append/.html без экранирования. Используйте .text() или санитайзер."
+    metadata: {cwe: "CWE-79", note: "эвристика по именам переменных ответа"}
+    paths:
+      include: ["*.jsp", "*.html", "*.js"]
+    pattern-regex: \.(?:append|prepend|html|after|before)\(\s*(?:data|resp|response|result|res|json|msg|message)(?:\.[A-Za-z_]+)*\s*\)
+
+  # Межпроцедурный taint (параметр контроллера -> вспомогательный метод -> exec) в Semgrep OSS недоступен
+  # (только в Pro): источник и приёмник в разных методах taint-правило пропускает. Поэтому — правило по
+  # самому опасному приёмнику: оболочка (`-c`) с НЕпостоянной командой. Проверьте, откуда приходит $CMD.
+  - id: gap-java-exec-shell-dynamic
+    languages: [java]
+    severity: ERROR
+    message: "CWE-78: Runtime.exec запускает оболочку (-c) с непостоянной командой. Если в $CMD попадает ввод пользователя (в т.ч. через вспомогательный метод) — внедрение команд. Используйте фиксированную команду и аргументы из allow-list."
+    metadata: {cwe: "CWE-78", owasp: "A03:2021", note: "эвристика: источник не прослеживается (нет межпроцедурного taint в OSS)"}
+    patterns:
+      - pattern: Runtime.getRuntime().exec(new String[] { $SH, "-c", $CMD })
+      - metavariable-regex:
+          metavariable: $SH
+          regex: ^"(bash|sh|/bin/sh|/bin/bash|cmd|cmd\.exe|powershell)"$
+      - pattern-not: Runtime.getRuntime().exec(new String[] { $SH, "-c", "..." })
+
+  - id: gap-java-exec-dynamic-arg
+    languages: [java]
+    severity: WARNING
+    message: "CWE-78: Runtime.exec с непостоянной строкой команды. Проверьте источник данных."
+    metadata: {cwe: "CWE-78", note: "эвристика"}
+    patterns:
+      - pattern: Runtime.getRuntime().exec($ARG)
+      - pattern-not: Runtime.getRuntime().exec("...")
+      - pattern-not: Runtime.getRuntime().exec(new String[] { ... })
+
+  - id: gap-java-trust-boundary-session
+    mode: taint
+    languages: [java]
+    severity: WARNING
+    message: "CWE-501 trust boundary: данные запроса без проверки записываются в сессию и далее считаются доверенными. Валидируйте ввод до записи в сессию."
+    metadata: {cwe: "CWE-501", owasp: "A04:2021", note: "эвристика"}
+    pattern-sources: *src
+    pattern-sinks:
+      - pattern: (HttpSession $S).setAttribute($K, $V)
+      - pattern: (HttpServletRequest $R).getSession().setAttribute($K, $V)
+      - pattern: $R.getSession().setAttribute($K, $V)
+
+  - id: gap-java-error-info-leak
+    languages: [java]
+    severity: WARNING
+    message: "CWE-209/CWE-200: подробности исключения (printStackTrace/getMessage) уходят пользователю или в стандартный вывод. Логируйте на сервере, клиенту — общее сообщение."
+    metadata: {cwe: "CWE-209", owasp: "A09:2021", note: "требование Z1: пользователю только общее сообщение об ошибке"}
+    pattern-either:
+      - pattern: $E.printStackTrace()
+      - pattern: return $E.getMessage();
+      - pattern: (HttpServletResponse $R).getWriter().print($E.getMessage())
