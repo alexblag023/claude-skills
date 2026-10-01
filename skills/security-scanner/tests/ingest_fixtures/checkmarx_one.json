@@ -1,0 +1,36 @@
+{
+ "results": [
+  {
+   "type": "sast",
+   "id": "r1",
+   "similarityId": "s1",
+   "status": "NEW",
+   "state": "TO_VERIFY",
+   "severity": "HIGH",
+   "data": {
+    "queryId": 1,
+    "queryName": "Spring_CSRF",
+    "fileName": "/src/Config.java",
+    "line": 31
+   },
+   "vulnerabilityDetails": {
+    "cweId": 352
+   }
+  },
+  {
+   "type": "sast",
+   "id": "r2",
+   "status": "RECURRENT",
+   "state": "NOT_EXPLOITABLE",
+   "severity": "CRITICAL",
+   "data": {
+    "queryName": "SQL_Injection",
+    "fileName": "/src/Db.java",
+    "line": 4
+   },
+   "vulnerabilityDetails": {
+    "cweId": 89
+   }
+  }
+ ]
+}

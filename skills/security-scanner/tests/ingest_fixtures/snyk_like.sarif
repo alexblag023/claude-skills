@@ -1,0 +1,102 @@
+{
+ "version": "2.1.0",
+ "runs": [
+  {
+   "tool": {
+    "driver": {
+     "name": "SnykCode",
+     "rules": [
+      {
+       "id": "python/CsrfDisabled",
+       "name": "CsrfDisabled",
+       "properties": {
+        "tags": [
+         "Security",
+         "CWE-352"
+        ]
+       }
+      },
+      {
+       "id": "python/Info",
+       "name": "Info",
+       "properties": {}
+      },
+      {
+       "id": "python/Sqli",
+       "name": "Sqli",
+       "properties": {
+        "tags": [
+         "CWE-89"
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "results": [
+    {
+     "ruleId": "python/CsrfDisabled",
+     "level": "error",
+     "message": {
+      "text": "CSRF protection disabled"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "app/web.py"
+        },
+        "region": {
+         "startLine": 12
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ruleId": "python/Info",
+     "level": "note",
+     "message": {
+      "text": "minor"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "app/x.py"
+        },
+        "region": {
+         "startLine": 3
+        }
+       }
+      }
+     ]
+    },
+    {
+     "ruleId": "python/Sqli",
+     "level": "error",
+     "message": {
+      "text": "sqli"
+     },
+     "suppressions": [
+      {
+       "kind": "inSource"
+      }
+     ],
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "app/db.py"
+        },
+        "region": {
+         "startLine": 7
+        }
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
