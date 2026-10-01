@@ -18,6 +18,8 @@ jobs:
         run: python3 scripts/validate_skills.py
       - name: Регрессионные тесты линтера CSRF (security-scanner)
         run: python3 skills/security-scanner/tests/run_csrf_lint_tests.py
+      - name: Тесты линтера утечек ресурсов Java (security-scanner)
+        run: python3 skills/security-scanner/tests/run_leak_lint_tests.py
       - name: Тесты свода внешних отчётов (security-scanner)
         run: python3 skills/security-scanner/tests/run_ingest_tests.py
       - name: Установка Semgrep (версия закреплена)
