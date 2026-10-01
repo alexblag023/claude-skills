@@ -114,9 +114,14 @@ def parse_sarif(doc, tool_label=None):
             file = (loc.get('artifactLocation') or {}).get('uri', '')
             line = (loc.get('region') or {}).get('startLine', 0)
             supp = 'suppressed' if res.get('suppressions') else 'open'
-            out.append(finding(tool, rid, (res.get('message') or {}).get('text', '') or rule.get('name', ''),
-                               sev, file, line, _cwe_from(props.get('tags') or props.get('cwe')), supp,
-                               sec if sec else level))
+            fnd = finding(tool, rid, (res.get('message') or {}).get('text', '') or rule.get('name', ''),
+                          sev, file, line, _cwe_from(props.get('tags') or props.get('cwe')), supp,
+                          sec if sec else level)
+            # справка правила (Grype/Trivy кладут туда версию с исправлением, KICS/Semgrep — описание и рекомендации):
+            # нужна потребителям, строящим «пути устранения»; на гейт не влияет
+            fnd['help'] = ((rule.get('help') or {}).get('text') or (rule.get('fullDescription') or {}).get('text') or '')[:4000]
+            fnd['rule_props'] = {k: v for k, v in props.items() if k in ('purls', 'precision', 'cvssv3_baseScore')}
+            out.append(fnd)
     return out
 
 
