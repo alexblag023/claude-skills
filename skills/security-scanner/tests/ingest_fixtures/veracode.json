@@ -1,28 +1,52 @@
 {
+ "scan_id": "00000000-0000-0000-0000-000000000000",
+ "scan_status": "SUCCESS",
+ "message": "Scan successful. Results size: 2 bytes",
+ "pipeline_scan": "24.1.0-0",
+ "dev_stage": "DEVELOPMENT",
  "findings": [
   {
-   "issue_id": 1001,
-   "issue_type": "Cross-Site Request Forgery (CSRF)",
    "title": "Cross-Site Request Forgery (CSRF)",
-   "cwe_id": "352",
+   "issue_id": 1001,
+   "gob": "B",
    "severity": 5,
+   "issue_type_id": "cross-site-request-forgery",
+   "issue_type": "Cross-Site Request Forgery (CSRF)",
+   "cwe_id": "352",
+   "display_text": "<span>synthetic</span>",
    "files": {
     "source_file": {
      "file": "web/forms.py",
-     "line": 15
+     "line": 15,
+     "function_name": "transfer",
+     "qualified_function_name": "web.forms.transfer",
+     "scope": "web.forms"
     }
+   },
+   "flaw_match": {
+    "procedure_hash": "1",
+    "prototype_hash": "2",
+    "flaw_hash": "3",
+    "flaw_hash_count": 1,
+    "flaw_hash_ordinal": 1,
+    "cause_hash": "4",
+    "cause_hash_count": 1,
+    "cause_hash_ordinal": 1
    }
   },
   {
-   "issue_id": 1002,
-   "issue_type": "Info Leak",
    "title": "Information Exposure",
-   "cwe_id": "200",
+   "issue_id": 1002,
    "severity": 2,
+   "issue_type": "Info Leak",
+   "cwe_id": "200",
+   "display_text": "x",
    "files": {
     "source_file": {
      "file": "web/log.py",
-     "line": 8
+     "line": 8,
+     "function_name": "f",
+     "qualified_function_name": "web.log.f"
     }
    }
   }

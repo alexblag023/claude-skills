@@ -24,6 +24,8 @@ CASES = {
     'cxsast.xml': (1, 1, True),            # блокер: High SQLi; открытая Medium CSRF не блокер, но класс CSRF сообщается
     'fortify.csv': (1, 1, True),
     'appscreener.csv': (1, 1, True),       # «Высокий» -> High
+    'kics_real.json': (1, 6, False),       # НАСТОЯЩИЙ родной JSON KICS (точная критичность queries[].severity)
+    'kics_real.sarif': (1, 6, False),      # НАСТОЯЩИЙ вывод KICS: level нет, severity в properties.riskScore (1 Critical + 5 High)
     'gitleaks_real.sarif': (1, 1, False),  # НАСТОЯЩИЙ вывод gitleaks (level отсутствует -> warning; секрет = минимум High)
 }
 
@@ -52,6 +54,14 @@ def main() -> int:
     rc, out = run(str(FX / 'veracode.json'), str(FX / 'fortify.csv'))
     if rc != 1 or 'Блокеров (открытые, не ниже High): 2' not in out:
         failed.append(f'мульти-файл: ожидалось 2 блокера\n{out}')
+    # KICS: критичность из riskScore — порог critical оставляет ровно один блокер (9.1)
+    rc, out = run(str(FX / 'kics_real.sarif'), '--fail-on', 'critical')
+    if rc != 1 or 'Блокеров (открытые, не ниже Critical): 1' not in out:
+        failed.append('kics --fail-on critical: ожидался 1 блокер (riskScore 9.1)')
+    # Veracode: неуспешный скан с пустым списком находок НЕ может быть «чисто» (код 2)
+    rc, out = run(str(FX / 'veracode_failed.json'))
+    if rc != 2 or 'scan_status' not in out:
+        failed.append(f'veracode_failed.json должен давать код 2 со scan_status: rc={rc}\n{out}')
     # XML с DTD отклоняется (код 2)
     rc, out = run(str(FX / 'evil.xml'), '--format', 'cxsast')
     if rc != 2 or 'DOCTYPE' not in out:
@@ -65,7 +75,7 @@ def main() -> int:
         failed.append('пустой SARIF должен давать код 0')
     for f in failed:
         print('FAIL', f)
-    print(f'ingest tests: {"FAIL" if failed else "OK"} ({len(failed)} ошибок из {len(CASES) + 5} проверок)')
+    print(f'ingest tests: {"FAIL" if failed else "OK"} ({len(failed)} ошибок из {len(CASES) + 7} проверок)')
     return 1 if failed else 0
 
 

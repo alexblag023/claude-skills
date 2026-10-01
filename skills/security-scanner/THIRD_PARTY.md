@@ -6,6 +6,7 @@
 |---|---|---|---|
 | `references/hermes_helpers/rest-graphql-debug/` | `NousResearch/hermes-agent`, `optional-skills/software-development/rest-graphql-debug` | eren-karakus0 | MIT |
 | `references/hermes_helpers/domain-intel/` | `NousResearch/hermes-agent`, `optional-skills/research/domain-intel` | FurkanL0, Hermes Agent | MIT |
+| `references/third_party/fortify_change_review/` | `fortify/skills`, навык `fortify-change-review` (чек-листы `sc-*.md`, `supported-categories.md`) | OpenText Corporation | MIT |
 | `references/supply_chain_forensics/` | `NousResearch/hermes-agent`, `optional-skills/security/oss-forensics` | Teknium (teknium1), Hermes Agent; адаптировано из RAPTOR | MIT (hermes-agent) + MIT (RAPTOR) |
 
 Файлы адаптированы (переведены/дополнены под этот скилл).
@@ -15,6 +16,8 @@
 ## Уведомления об авторском праве
 
 **hermes-agent** — MIT License, Copyright (c) 2025 Nous Research.
+
+**fortify/skills** — MIT License, Copyright (c) 2026 OpenText Corporation.
 
 **RAPTOR** (`gadievron/raptor`, на котором основан oss-forensics) — MIT License, Copyright (c) 2025-2026 Gadi Evron, Daniel Cuthbert, Thomas Dullien (Halvar Flake), Michael Bargury, and John Cartwright.
 
