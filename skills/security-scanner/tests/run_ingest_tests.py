@@ -63,6 +63,15 @@ def main() -> int:
     rc, out = run(str(FX / 'veracode_failed.json'))
     if rc != 2 or 'scan_status' not in out:
         failed.append(f'veracode_failed.json должен давать код 2 со scan_status: rc={rc}\n{out}')
+    # security-severity '4.0' — CVSS (Medium), а не целая шкала Veracode «4 = High» (регресс из теста java_resource_leak_lint)
+    cvss = HERE / 'ingest_fixtures' / '_cvss_4_0.sarif'
+    cvss.write_text('{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"x","rules":[{"id":"r","properties":'
+                    '{"security-severity":"4.0"}}]}},"results":[{"ruleId":"r","message":{"text":"m"},"locations":[]}]}]}',
+                    encoding='utf-8')
+    rc, out = run(str(cvss))
+    cvss.unlink()
+    if rc != 0 or 'Medium=1' not in out:
+        failed.append(f'security-severity 4.0 должен быть Medium (код 0 при --fail-on high), получено rc={rc}\n{out}')
     # XML с DTD отклоняется (код 2)
     rc, out = run(str(FX / 'evil.xml'), '--format', 'cxsast')
     if rc != 2 or 'DOCTYPE' not in out:
@@ -76,7 +85,7 @@ def main() -> int:
         failed.append('пустой SARIF должен давать код 0')
     for f in failed:
         print('FAIL', f)
-    print(f'ingest tests: {"FAIL" if failed else "OK"} ({len(failed)} ошибок из {len(CASES) + 7} проверок)')
+    print(f'ingest tests: {"FAIL" if failed else "OK"} ({len(failed)} ошибок из {len(CASES) + 8} проверок)')
     return 1 if failed else 0
 
 
