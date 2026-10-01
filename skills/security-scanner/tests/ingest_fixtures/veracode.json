@@ -1,0 +1,30 @@
+{
+ "findings": [
+  {
+   "issue_id": 1001,
+   "issue_type": "Cross-Site Request Forgery (CSRF)",
+   "title": "Cross-Site Request Forgery (CSRF)",
+   "cwe_id": "352",
+   "severity": 5,
+   "files": {
+    "source_file": {
+     "file": "web/forms.py",
+     "line": 15
+    }
+   }
+  },
+  {
+   "issue_id": 1002,
+   "issue_type": "Info Leak",
+   "title": "Information Exposure",
+   "cwe_id": "200",
+   "severity": 2,
+   "files": {
+    "source_file": {
+     "file": "web/log.py",
+     "line": 8
+    }
+   }
+  }
+ ]
+}

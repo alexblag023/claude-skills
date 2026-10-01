@@ -1,0 +1,45 @@
+{
+ "version": "2.1.0",
+ "runs": [
+  {
+   "tool": {
+    "driver": {
+     "name": "CodeQL",
+     "rules": [
+      {
+       "id": "py/command-line-injection",
+       "properties": {
+        "security-severity": "9.8",
+        "tags": [
+         "external/cwe/cwe-078"
+        ]
+       }
+      }
+     ]
+    }
+   },
+   "results": [
+    {
+     "ruleId": "py/command-line-injection",
+     "ruleIndex": 0,
+     "level": "error",
+     "message": {
+      "text": "cmd injection"
+     },
+     "locations": [
+      {
+       "physicalLocation": {
+        "artifactLocation": {
+         "uri": "a.py"
+        },
+        "region": {
+         "startLine": 5
+        }
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

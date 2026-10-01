@@ -1,0 +1,64 @@
+[
+ {
+  "number": 1,
+  "state": "open",
+  "tool": {
+   "name": "CodeQL"
+  },
+  "rule": {
+   "id": "py/csrf-protection-disabled",
+   "severity": "error",
+   "security_severity_level": "high",
+   "description": "CSRF protection weakened or disabled",
+   "tags": [
+    "security",
+    "external/cwe/cwe-352"
+   ]
+  },
+  "most_recent_instance": {
+   "location": {
+    "path": "app/settings.py",
+    "start_line": 40
+   }
+  }
+ },
+ {
+  "number": 2,
+  "state": "dismissed",
+  "tool": {
+   "name": "CodeQL"
+  },
+  "rule": {
+   "id": "py/sql-injection",
+   "severity": "error",
+   "security_severity_level": "critical",
+   "tags": [
+    "external/cwe/cwe-089"
+   ]
+  },
+  "most_recent_instance": {
+   "location": {
+    "path": "app/db.py",
+    "start_line": 9
+   }
+  }
+ },
+ {
+  "number": 3,
+  "state": "open",
+  "tool": {
+   "name": "CodeQL"
+  },
+  "rule": {
+   "id": "py/minor",
+   "severity": "note",
+   "tags": []
+  },
+  "most_recent_instance": {
+   "location": {
+    "path": "app/m.py",
+    "start_line": 1
+   }
+  }
+ }
+]
