@@ -1,0 +1,1 @@
+<form method="POST" action="/a"><?php echo 1; ?></form>
