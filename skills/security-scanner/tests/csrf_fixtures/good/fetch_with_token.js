@@ -1,0 +1,1 @@
+const h = {"X-CSRF-Token": tok}; fetch("/a", {method: "POST", headers: h});
