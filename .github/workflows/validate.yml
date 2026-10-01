@@ -22,6 +22,8 @@ jobs:
         run: python3 skills/security-scanner/tests/run_leak_lint_tests.py
       - name: Тесты свода внешних отчётов (security-scanner)
         run: python3 skills/security-scanner/tests/run_ingest_tests.py
+      - name: Тесты моста к платформе (security-scanner)
+        run: python3 skills/security-scanner/tests/run_bridge_tests.py
       - name: Установка Semgrep (версия закреплена)
         run: pip install --quiet semgrep==1.178.0
       - name: Тесты собственных правил Semgrep (security-scanner)
