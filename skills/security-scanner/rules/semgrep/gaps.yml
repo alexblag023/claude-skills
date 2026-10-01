@@ -1,0 +1,145 @@
+rules:
+  # Правила закрывают классы, которые не поймали p/security-audit, p/owasp-top-ten, p/python, p/secrets,
+  # p/javascript, p/c и bandit на корпусе tests/vuln_corpus (см. references/coverage_matrix.md).
+  # Часть правил — эвристики: severity WARNING означает «проверить вручную», ERROR — высокая уверенность.
+
+  - id: gap-dom-xss-innerhtml
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: "CWE-79 DOM XSS: непостоянное значение записывается в innerHTML/outerHTML/insertAdjacentHTML/document.write. Используйте textContent или санитайзер."
+    metadata: {cwe: "CWE-79", owasp: "A03:2021"}
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: $EL.innerHTML = $VAL
+              - pattern: $EL.outerHTML = $VAL
+          - pattern-not: $EL.innerHTML = "..."
+          - pattern-not: $EL.outerHTML = "..."
+      - pattern: $EL.insertAdjacentHTML($POS, $VAL)
+      - pattern: document.write($VAL)
+
+  - id: gap-xxe-lxml-resolve-entities
+    languages: [python]
+    severity: ERROR
+    message: "CWE-611 XXE: XMLParser с resolve_entities=True разрешает внешние сущности. Укажите resolve_entities=False, no_network=True или используйте defusedxml."
+    metadata: {cwe: "CWE-611", owasp: "A05:2021"}
+    pattern-either:
+      - pattern: $M.XMLParser(..., resolve_entities=True, ...)
+      - pattern: $M.XMLParser(..., load_dtd=True, ...)
+
+  - id: gap-upload-unsanitized-filename
+    languages: [python]
+    severity: ERROR
+    message: "CWE-434/CWE-22: файл сохраняется под именем от клиента. Применяйте werkzeug.utils.secure_filename, проверку расширения/типа/размера и каталог вне веб-корня."
+    metadata: {cwe: "CWE-434", owasp: "A04:2021"}
+    pattern-either:
+      - pattern: $F.save($A + $F.filename)
+      - pattern: $F.save(os.path.join($A, $F.filename))
+      - pattern: $F.save(f"...{$F.filename}...")
+
+  - id: gap-open-redirect
+    languages: [python]
+    severity: WARNING
+    message: "CWE-601 open redirect: redirect по параметру запроса. Допускайте только относительные пути/allow-list хостов (url_for, проверка netloc)."
+    metadata: {cwe: "CWE-601", owasp: "A01:2021", note: "по политике скила не блокер без высокой уверенности"}
+    pattern-either:
+      - pattern: redirect(request.args[...])
+      - pattern: redirect(request.args.get(...))
+      - pattern: redirect(request.values[...])
+      - pattern: redirect(request.form[...])
+
+  - id: gap-regex-dos-user-pattern
+    languages: [python]
+    severity: WARNING
+    message: "CWE-1333/CWE-400: регулярное выражение приходит от пользователя. Экранируйте re.escape или ограничьте длину/используйте безопасный движок."
+    metadata: {cwe: "CWE-1333", note: "по политике скила DoS не блокер"}
+    patterns:
+      - pattern-either:
+          - pattern: re.$FUNC(request.args[...], ...)
+          - pattern: re.$FUNC(request.args.get(...), ...)
+          - pattern: re.$FUNC(request.form[...], ...)
+      - metavariable-regex:
+          metavariable: $FUNC
+          regex: ^(match|search|fullmatch|compile|findall|finditer|sub|subn|split)$   # re.escape не считается
+
+  - id: gap-toctou-exists-then-open
+    languages: [python]
+    severity: WARNING
+    message: "CWE-367 TOCTOU: проверка os.path.exists и последующее открытие того же пути — гонка. Открывайте файл сразу и обрабатывайте FileNotFoundError."
+    metadata: {cwe: "CWE-367", owasp: "A04:2021"}
+    pattern: |
+      if os.path.exists($P):
+          ...
+          open($P, ...)
+
+  - id: gap-flask-admin-route-without-auth
+    languages: [python]
+    severity: WARNING
+    message: "CWE-862 missing authorization: маршрут с /admin/ не защищён декоратором авторизации. Проверьте login_required/роль на сервере."
+    metadata: {cwe: "CWE-862", owasp: "A01:2021", note: "эвристика по имени пути и декораторам"}
+    patterns:
+      - pattern: |
+          @$APP.route("=~/.*admin.*/", ...)
+          def $F(...):
+              ...
+      - pattern-not: |
+          @$APP.route(...)
+          @login_required
+          def $F(...):
+              ...
+      - pattern-not: |
+          @login_required
+          @$APP.route(...)
+          def $F(...):
+              ...
+      - pattern-not: |
+          @$APP.route(...)
+          @$AUTH.login_required
+          def $F(...):
+              ...
+      - pattern-not: |
+          @$APP.route(...)
+          @admin_required
+          def $F(...):
+              ...
+
+  - id: gap-yaml-load-unsafe
+    languages: [python]
+    severity: ERROR
+    message: "CWE-502: yaml.load без безопасного загрузчика исполняет произвольные объекты. Используйте yaml.safe_load или Loader=SafeLoader."
+    metadata: {cwe: "CWE-502", owasp: "A08:2021"}
+    patterns:
+      - pattern: yaml.load($X)
+      - pattern-not: yaml.load($X, Loader=yaml.SafeLoader)
+      - pattern-not: yaml.load($X, Loader=SafeLoader)
+      - pattern-not: yaml.load($X, Loader=yaml.CSafeLoader)
+
+  - id: gap-c-malloc-use-without-null-check
+    languages: [c, cpp]
+    severity: WARNING
+    message: "CWE-476: результат malloc используется без проверки на NULL."
+    metadata: {cwe: "CWE-476"}
+    patterns:
+      - pattern: |
+          $P = malloc(...);
+          ...
+          $P[$I] = $V;
+      - pattern-not: |
+          $P = malloc(...);
+          ...
+          if ($P == NULL) { ... }
+          ...
+      - pattern-not: |
+          $P = malloc(...);
+          ...
+          if (!$P) { ... }
+          ...
+
+  - id: gap-hardcoded-secret-assignment
+    languages: [generic]
+    severity: WARNING
+    message: "CWE-798: похоже на секрет в коде (имя переменной + строковый литерал). Вынесите в переменные окружения/секрет-хранилище; если токен был в git — отзовите."
+    metadata: {cwe: "CWE-798", owasp: "A07:2021", note: "эвристика по имени; дополняет gitleaks (форматы токенов)"}
+    paths:
+      include: ["*.py", "*.js", "*.ts", "*.java", "*.go", "*.rb", "*.php", "*.cs", "*.yml", "*.yaml", "*.env"]
+    pattern-regex: (?i)\b[a-z0-9_]*(password|passwd|pwd|secret|api_?key|token)[a-z0-9_]*\s*[:=]\s*['"][^'"\s]{8,}['"]
