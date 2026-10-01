@@ -24,6 +24,7 @@ CASES = {
     'cxsast.xml': (1, 1, True),            # блокер: High SQLi; открытая Medium CSRF не блокер, но класс CSRF сообщается
     'fortify.csv': (1, 1, True),
     'appscreener.csv': (1, 1, True),       # «Высокий» -> High
+    'veracode_real_verademo.json': (1, 16, False),  # НАСТОЯЩИЙ results.json Veracode (verademo, MIT): 225 находок, 2 Critical + 14 High
     'kics_real.json': (1, 6, False),       # НАСТОЯЩИЙ родной JSON KICS (точная критичность queries[].severity)
     'kics_real.sarif': (1, 6, False),      # НАСТОЯЩИЙ вывод KICS: level нет, severity в properties.riskScore (1 Critical + 5 High)
     'gitleaks_real.sarif': (1, 1, False),  # НАСТОЯЩИЙ вывод gitleaks (level отсутствует -> warning; секрет = минимум High)
