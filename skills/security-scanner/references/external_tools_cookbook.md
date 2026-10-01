@@ -35,7 +35,7 @@ python scripts/ingest_external_report.py <файл> [<файл>...] [--format sa
 
 ## Veracode
 - Pipeline Scan: `java -jar pipeline-scan.jar --veracode_api_id … --veracode_api_key … --file app.jar --json_output_file results.json --fail_on_severity="Very High, High"`; новый CLI: `veracode static scan` (`--results-file`, по умолчанию `./results.json`). Код возврата ≥ 1 при находках. [ДОК] Ключи — только из переменных окружения/секрет-хранилища, не в командной строке CI-логов.
-- `results.json`: поля находки `issue_id, issue_type, cwe_id, severity, files, line, title, flaw_details_link`; полная схема и вложенность `files` не подтверждены — парсер ищет `files.source_file.{file,line}` и запасной `file/line`. [ДОК частично]
+- `results.json` (схема **подтверждена исходниками** конвертера Veracode `veracode-pipeline-scan-results-to-sarif`, MIT): верхний уровень `scan_id, scan_status, message, pipeline_scan, dev_stage, findings[]`; находка: `title, issue_id, severity` (число), `issue_type, cwe_id` (**строка**), `display_text, files.source_file.{file, line, function_name, qualified_function_name}, flaw_match`. Severity→CVSS в конвертере: 5→9.0, 4→7.0, 3→4.0. **`scan_status` ≠ `SUCCESS` → ingest завершается кодом 2**: пустой `findings` при неудачном скане не означает «чисто». [ПОДТВЕРЖДЕНО по исходникам; живой выгрузки не было]
 - Шкала: 0 Info, 1 Very Low, 2 Low, 3 Medium, 4 High, 5 Very High. [ДОК]
 - `detailedreport.xml` (атрибуты `issueid, cweid, type, sourcefile, line, remediation_status`, mitigation в `annotation`) — формально в ingest не разбирается: схема `detailedreport.xsd`; используйте Pipeline Scan JSON или Findings API. [ВТОРИЧНО]
 - API: `GET /appsec/v2/applications/{guid}/findings` (`scan_type`, `cwe`, `severity`), pipeline: `/pipeline_scan/v1/scans/{id}/findings`; аутентификация HMAC (API ID/key). [ДОК]
@@ -53,6 +53,13 @@ python scripts/ingest_external_report.py <файл> [<файл>...] [--format sa
 - Ingest читает CSV с поиском колонок по имени (`category/issue name`, `friority/priority/severity`, `path/file`, `line`) — это **best-effort**: точные заголовки колонок FPRUtility CSV не подтверждены. SARIF нативно SCA не отдаёт (через fcli), FVDL-XML в ingest не разбирается (схема не официальная). [ДОК частично]
 - SSC API: токен `POST /api/v1/tokens`, находки `GET /api/v1/projectVersions/{id}/issues?q=…` с заголовком `Authorization: FortifyToken <token>`. [ВТОРИЧНО]
 - CSRF: категория «Cross-Site Request Forgery» (Kingdom: Encapsulation); варианты для HTML не найдено. [ВТОРИЧНО] Публичного trial SCA нет.
+
+## KICS (Checkmarx, IaC) — открытый, Apache-2.0
+- Образ: `docker pull checkmarx/kics:latest` (на этой машине первая загрузка обрывалась по сети; повторный `docker pull` докачал кэшированные слои). Платформы: Terraform, Kubernetes, Dockerfile, Ansible, CloudFormation, Helm, OpenAPI и др.
+- Запуск (проверено на `tests/iac_corpus/`: Dockerfile + Pod + Terraform): `docker run --rm -v <каталог>:/src:ro -v <выход>:/out checkmarx/kics:latest scan -p /src --report-formats sarif,json -o /out --no-progress` **[ПОДТВЕРЖДЕНО прогоном: 37 находок — 1 Critical, 5 High, 13 Medium, 12 Low, 6 Info]**. Код выхода 60 при находках уровня High (коды зависят от максимальной критичности) — не путать с ошибкой запуска.
+- Ingest: `python scripts/ingest_external_report.py out/results.json` (родной JSON, **точная** критичность: `queries[].severity`) — рекомендуемый вариант; `results.sarif` тоже читается, но в нём нет `level`, критичность лежит в `properties.riskScore` (пороги приблизительные: Medium/Low расходятся на 1 находку). Оба формата — **НАСТОЯЩИЙ вывод** (`tests/ingest_fixtures/kics_real.json`, `kics_real.sarif`).
+- Поля JSON: `kics_version, files_scanned, severity_counters, queries[]{query_name, query_id, severity, platform, cwe, risk_score, category, description, files[]{file_name, line, resource_type, issue_type, expected_value, actual_value}}`.
+- Скрыть секреты в отчёте/не искать их: `--disable-secrets` (секреты ищем gitleaks).
 
 ## Solar appScreener
 См. `external_sast_profiles.md`. Формат `Detailed_Results.csv` (`Vulnerability, Severity Level, File, Line…`) читается ingest-скриптом; русские уровни «Критический/Высокий/Средний/Низкий» распознаются. [ДОК парсера DefectDojo; живой выгрузки appScreener не было]

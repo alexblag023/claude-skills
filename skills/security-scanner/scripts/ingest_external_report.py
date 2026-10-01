@@ -7,6 +7,7 @@
   ghas         GitHub code scanning REST: ответ `GET /repos/{o}/{r}/code-scanning/alerts` (список алертов)
   sonar        SonarQube `api/issues/search` ({"issues":[...]}) и `api/hotspots/search` ({"hotspots":[...]})
   veracode     Veracode Pipeline Scan results.json ({"findings":[...]})
+  kics         KICS (Checkmarx) родной JSON (`kics scan --report-formats json`) — IaC: Terraform/K8s/Docker/…
   checkmarx    Checkmarx One JSON (`--report-format json`: {"results":[...]})
   cxsast       CxSAST XML (<CxXMLResults>)
   fortify      Fortify `FPRUtility -information -listIssues ... -outputFormat CSV` (поиск колонок по имени, best-effort)
@@ -100,7 +101,8 @@ def parse_sarif(doc, tool_label=None):
                 rule = driver['rules'][idx]  # SARIF допускает ссылку на правило по индексу
             rule = rule or {}
             props = {**(rule.get('properties') or {}), **(res.get('properties') or {})}
-            sec = props.get('security-severity')
+            # числовая оценка: security-severity (CodeQL/GHAS) или riskScore (KICS — реальный вывод, level там нет)
+            sec = props.get('security-severity') or props.get('riskScore')
             # SARIF 2.1.0: отсутствующий level = warning (так и выдаёт, например, gitleaks)
             level = res.get('level') or (rule.get('defaultConfiguration') or {}).get('level') or 'warning'
             sev = norm_severity(sec) if sec not in (None, '') else norm_severity(level)
@@ -147,6 +149,12 @@ def parse_sonar(doc):
 
 
 def parse_veracode(doc):
+    # Схема подтверждена исходниками конвертера Veracode (veracode-pipeline-scan-results-to-sarif):
+    # верхний уровень scan_status/findings[]; при неуспешном скане findings пуст — это НЕ «чисто».
+    status = doc.get('scan_status')
+    if status not in (None, 'SUCCESS'):
+        raise ValueError(f'Veracode scan_status={status!r}: скан не завершён успешно, результаты неполные '
+                         f'({doc.get("message", "")}) — пустой список находок не означает «чисто»')
     out = []
     for f in doc.get('findings', []):
         files = f.get('files') or {}
@@ -168,6 +176,19 @@ def parse_checkmarx(doc):
                            norm_severity(r.get('severity')), d.get('fileName'), d.get('line'),
                            f'CWE-{vd["cweId"]}' if vd.get('cweId') else '', r.get('state') or r.get('status') or 'open',
                            r.get('severity')))
+    return out
+
+
+def parse_kics(doc):
+    """Родной JSON KICS (`--report-formats json`): queries[] {query_name, severity, cwe, risk_score, files[]}."""
+    if doc.get('files_scanned') == 0:
+        raise ValueError('KICS: files_scanned=0 — ни один файл не просканирован, пустой результат не означает «чисто»')
+    out = []
+    for q in doc.get('queries', []):
+        for f in q.get('files') or [{}]:
+            out.append(finding('KICS', q.get('query_name'), q.get('query_name'), norm_severity(q.get('severity')),
+                               f.get('file_name'), f.get('line'), f'CWE-{q["cwe"]}' if q.get('cwe') else '',
+                               'open', q.get('severity')))
     return out
 
 
@@ -224,13 +245,15 @@ def load(path: Path, fmt: str | None):
             fmt = 'xml'
         else:
             fmt = 'csv'
-    if fmt in ('sarif', 'ghas', 'sonar', 'veracode', 'checkmarx', 'json'):
+    if fmt in ('sarif', 'ghas', 'sonar', 'veracode', 'checkmarx', 'kics', 'json'):
         doc = json.loads(text)
         if fmt == 'json':
             if isinstance(doc, dict) and 'runs' in doc:
                 fmt = 'sarif'
             elif isinstance(doc, list):
                 fmt = 'ghas'
+            elif 'kics_version' in doc and 'queries' in doc:
+                fmt = 'kics'
             elif 'issues' in doc or 'hotspots' in doc:
                 fmt = 'sonar'
             elif 'findings' in doc:
@@ -240,7 +263,7 @@ def load(path: Path, fmt: str | None):
             else:
                 raise ValueError('неизвестная структура JSON; укажите --format')
         return {'sarif': parse_sarif, 'ghas': parse_ghas, 'sonar': parse_sonar,
-                'veracode': parse_veracode, 'checkmarx': parse_checkmarx}[fmt](doc), fmt
+                'veracode': parse_veracode, 'checkmarx': parse_checkmarx, 'kics': parse_kics}[fmt](doc), fmt
     if fmt in ('cxsast', 'xml'):
         if re.search(r'<!DOCTYPE|<!ENTITY', text, re.I):  # недоверенный XML: без DTD/сущностей (XXE, billion laughs)
             raise ValueError('XML содержит DOCTYPE/ENTITY — отклонён')
