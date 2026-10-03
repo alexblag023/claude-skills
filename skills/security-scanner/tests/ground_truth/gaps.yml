@@ -1,0 +1,245 @@
+# Ground-truth для eval-харнесса (tests/score.py). Декларативная разметка:
+# каждый finding = ОДНА истинная локация уязвимости в корпусе.
+#
+# Поля: file, cwe, line (1-индекс), anchor (подстрока РОВНО на строке line —
+# защита от дрейфа: score.py падает, если якорь уехал/исчез), rule (опц. —
+# ожидаемое собственное gap-* правило; где нет, класс покрывается реестром Semgrep).
+#
+# Пути corpus_root/safe_root — относительно каталога ЭТОГО файла.
+# ВАЖНО: anchor каждого finding проверяется `python tests/score.py` перед подсчётом.
+corpus_root: ../vuln_corpus
+safe_root: ../vuln_corpus_safe
+findings:
+  - file: Dockerfile
+    cwe: CWE-250
+    line: 1
+    anchor: "FROM python:3.12"
+  - file: cwe022_path_traversal.py
+    cwe: CWE-22
+    line: 3
+    anchor: "open('/data/' + request.args"
+  - file: cwe078_java_exec.java
+    cwe: CWE-78
+    rule: gap-java-exec-shell-dynamic
+    line: 11
+    anchor: "Runtime.getRuntime().exec"
+  - file: cwe078_os_cmd.py
+    cwe: CWE-78
+    line: 4
+    anchor: "os.system('ping ' + request"
+  - file: cwe078_subprocess_shell.py
+    cwe: CWE-78
+    line: 4
+    anchor: "subprocess.run('ls ' + request"
+  - file: cwe079_dom_xss.js
+    cwe: CWE-79
+    rule: gap-dom-xss-innerhtml
+    line: 1
+    anchor: "innerHTML = location.hash"
+  - file: cwe079_java_xss_responsebody.java
+    cwe: CWE-79
+    rule: gap-java-xss-responsebody
+    line: 9
+    anchor: "return \"<p>\" + q + \"</p>\""
+  - file: cwe079_template_safe.html
+    cwe: CWE-79
+    is_vuln: true
+    line: 1
+    anchor: "user_input|safe"
+  - file: cwe079_xss_response.py
+    cwe: CWE-79
+    line: 3
+    anchor: "make_response('<h1>' + request"
+  - file: cwe089_sqli.py
+    cwe: CWE-89
+    line: 5
+    anchor: "c.execute(f\"SELECT * FROM"
+  - file: cwe094_eval.py
+    cwe: CWE-94
+    line: 3
+    anchor: "eval(request.args['e'])"
+  - file: cwe113_java_crlf.java
+    cwe: CWE-113
+    rule: gap-java-crlf-header-cookie
+    line: 8
+    anchor: "resp.addHeader(\"X-Custom\", v)"
+  - file: cwe117_java_logforging.java
+    cwe: CWE-117
+    rule: gap-java-log-forging
+    line: 11
+    anchor: "logger.info(\"login by \" + user)"
+  - file: cwe1336_ssti.py
+    cwe: CWE-1336
+    line: 3
+    anchor: "render_template_string('Hello '"
+  - file: cwe134_java_format.java
+    cwe: CWE-134
+    rule: gap-java-format-string
+    line: 10
+    anchor: "String.format(f, \"x\")"
+  - file: cwe134_java_implicit_param.java
+    cwe: CWE-134
+    rule: gap-java-format-string
+    line: 9
+    anchor: "String.format(f, \"x\")"
+  - file: cwe209_java_error_leak.java
+    cwe: CWE-209
+    rule: gap-java-error-info-leak
+    line: 6
+    anchor: "e.printStackTrace()"
+  - file: cwe259_java_password_field.java
+    cwe: CWE-259
+    rule: gap-java-hardcoded-password-var
+    line: 2
+    anchor: "DB_PASSWORD = \"z2^E6J4"
+  - file: cwe276_perms.py
+    cwe: CWE-276
+    line: 3
+    anchor: "os.chmod('/etc/app.conf', 0o777)"
+  - file: cwe295_tls_verify_off.py
+    cwe: CWE-295
+    line: 3
+    anchor: "verify=False"
+  - file: cwe327_weak_hash.py
+    cwe: CWE-327
+    line: 3
+    anchor: "hashlib.md5(p.encode())"
+  - file: cwe330_java_random.java
+    cwe: CWE-330
+    rule: gap-java-insecure-random
+    line: 4
+    anchor: "Random r = new Random()"
+  - file: cwe338_weak_random.py
+    cwe: CWE-338
+    line: 3
+    anchor: "random.random()"
+  - file: cwe352_fetch.js
+    cwe: CWE-352
+    line: 1
+    anchor: "fetch('/api/delete'"
+  - file: cwe352_flask_csrf_off.py
+    cwe: CWE-352
+    line: 3
+    anchor: "WTF_CSRF_ENABLED'] = False"
+  - file: cwe352_form.html
+    cwe: CWE-352
+    line: 1
+    anchor: "method=\"post\" action=\"/transfer\""
+  - file: cwe352_htmx.html
+    cwe: CWE-352
+    line: 1
+    anchor: "hx-post=\"/delete_all\""
+  - file: cwe362_race_toctou.py
+    cwe: CWE-362
+    rule: gap-toctou-exists-then-open
+    line: 3
+    anchor: "os.path.exists(p)"
+  - file: cwe377_mktemp.py
+    cwe: CWE-377
+    line: 3
+    anchor: "tempfile.mktemp()"
+  - file: cwe400_regex_dos.py
+    cwe: CWE-400
+    rule: gap-regex-dos-user-pattern
+    line: 4
+    anchor: "re.match(request.args['p']"
+  - file: cwe416_uaf.c
+    cwe: CWE-416
+    line: 2
+    anchor: "free(p); p[0] = 1"
+  - file: cwe434_upload.py
+    cwe: CWE-434
+    rule: gap-upload-unsanitized-filename
+    line: 4
+    anchor: "file.save('/uploads/' + file.filename"
+  - file: cwe470_java_reflection.java
+    cwe: CWE-470
+    rule: gap-java-unsafe-reflection
+    line: 8
+    anchor: "Class.forName(\"app.commands.\""
+  - file: cwe476_null.c
+    cwe: CWE-476
+    rule: gap-c-malloc-use-without-null-check
+    line: 2
+    anchor: "malloc(4); p[0] = 1"
+  - file: cwe489_flask_debug.py
+    cwe: CWE-489
+    line: 4
+    anchor: "app.run(debug=True"
+  - file: cwe501_java_trust_boundary.java
+    cwe: CWE-501
+    rule: gap-java-trust-boundary-session
+    line: 8
+    anchor: "session.setAttribute(\"role\", role)"
+  - file: cwe502_pickle.py
+    cwe: CWE-502
+    line: 4
+    anchor: "pickle.loads(request.data)"
+  - file: cwe502_yaml.py
+    cwe: CWE-502
+    rule: gap-yaml-load-unsafe
+    line: 4
+    anchor: "yaml.load(request.data)"
+  - file: cwe601_java_redirect.java
+    cwe: CWE-601
+    rule: gap-java-open-redirect
+    line: 8
+    anchor: "return \"redirect:\" + target"
+  - file: cwe601_open_redirect.py
+    cwe: CWE-601
+    rule: gap-open-redirect
+    line: 3
+    anchor: "redirect(request.args['next'])"
+  - file: cwe611_xxe.py
+    cwe: CWE-611
+    rule: gap-xxe-lxml-resolve-entities
+    line: 4
+    anchor: "resolve_entities=True"
+  - file: cwe787_buffer.c
+    cwe: CWE-787
+    line: 2
+    anchor: "strcpy(b, s)"
+  - file: cwe798_hardcoded_secret.py
+    cwe: CWE-798
+    rule: gap-hardcoded-secret-assignment
+    line: 1
+    anchor: "DB_PASSWORD = 'SuperSecret123!'"
+  - file: cwe798_java_default_creds.java
+    cwe: CWE-798
+    rule: gap-java-default-credentials
+    line: 2
+    anchor: "User.create(\"admin\", \"admin\""
+  - file: cwe798_java_password_call.java
+    cwe: CWE-798
+    rule: gap-java-hardcoded-password-call
+    line: 4
+    anchor: "\"app\", \"Sup3rSecret!\""
+  - file: cwe862_missing_authz.py
+    cwe: CWE-862
+    rule: gap-flask-admin-route-without-auth
+    line: 3
+    anchor: "@app.route('/admin/delete_all'"
+  - file: cwe918_ssrf.py
+    cwe: CWE-918
+    line: 4
+    anchor: "requests.get(request.args['url'])"
+safe:
+  - safe_authz.py
+  - safe_dom.js
+  - safe_java_error.java
+  - safe_java_exec.java
+  - safe_java_format.java
+  - safe_java_password.java
+  - safe_java_random.java
+  - safe_java_redirect.java
+  - safe_java_reflection.java
+  - safe_java_trust.java
+  - safe_java_xss.java
+  - safe_malloc.c
+  - safe_redirect.py
+  - safe_regex.py
+  - safe_secret.py
+  - safe_toctou.py
+  - safe_upload.py
+  - safe_xxe.py
+  - safe_yaml.py
