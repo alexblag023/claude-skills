@@ -1,0 +1,120 @@
+rules:
+  # Go/net/http: taint-правила, связывающие внешние данные запроса (источник) с опасным приёмником.
+  # gosec покрывает ОТДЕЛЬНЫЕ приёмники как эвристику (G201 SQL-конкатенация, G204 exec, G107 SSRF,
+  # G304 path, G401/G501 слабый хеш, G101 секрет), но БЕЗ taint он не связывает источник→приёмник и шумит
+  # на безопасном параметризованном коде. Эти правила требуют поток «данные запроса -> sink» и молчат на
+  # безопасных эквивалентах (placeholder $1/?, argv без оболочки, allow-list URL, filepath.Clean+префикс).
+  # Общий набор источников net/http задан якорем &src. OSS taint межпроцедурный поток не ловит (только Pro):
+  # источник и приёмник должны быть в одной функции; где возможно, приёмник сфокусирован на опасном аргументе.
+
+  - id: gap-go-sql-injection
+    mode: taint
+    languages: [go]
+    severity: ERROR
+    message: "CWE-89 SQL injection: данные запроса попадают в текст SQL (fmt.Sprintf/конкатенация). Используйте параметризованный запрос с placeholder ($1/?) и передавайте ввод отдельным аргументом."
+    metadata: {cwe: "CWE-89", owasp: "A03:2021"}
+    pattern-sources: &src
+      - pattern: $R.URL.Query().Get(...)
+      - pattern: $R.FormValue(...)
+      - pattern: $R.PostFormValue(...)
+      - pattern: $R.Header.Get(...)
+      - pattern: mux.Vars(...)
+    pattern-sinks:
+      # фокус на СТРОКЕ запроса (первый аргумент): placeholder-значения идут отдельными аргументами ($1/?) и в фокус не попадают
+      - patterns:
+          - pattern-either:
+              - pattern: $DB.Query($Q, ...)
+              - pattern: $DB.QueryRow($Q, ...)
+              - pattern: $DB.Exec($Q, ...)
+              - pattern: $DB.QueryContext($CTX, $Q, ...)
+              - pattern: $DB.QueryRowContext($CTX, $Q, ...)
+              - pattern: $DB.ExecContext($CTX, $Q, ...)
+          - focus-metavariable: $Q
+
+  - id: gap-go-os-command-injection
+    mode: taint
+    languages: [go]
+    severity: ERROR
+    message: "CWE-78 command injection: данные запроса попадают в exec.Command — как имя программы или как строка для оболочки (sh -c). Не собирайте команду из ввода: фиксированная программа + аргументы argv, без оболочки."
+    metadata: {cwe: "CWE-78", owasp: "A03:2021"}
+    pattern-sources: *src
+    pattern-sinks:
+      # имя исполняемого файла из ввода (безопасный argv имеет здесь литерал -> не срабатывает)
+      - patterns:
+          - pattern-either:
+              - pattern: exec.Command($P, ...)
+              - pattern: exec.CommandContext($CTX, $P, ...)
+          - focus-metavariable: $P
+      # команда для оболочки: exec.Command("sh","-c", <ввод>) / cmd /c
+      - patterns:
+          - pattern-either:
+              - pattern: exec.Command($SH, "-c", $CMD)
+              - pattern: exec.Command($SH, "/c", $CMD)
+              - pattern: exec.CommandContext($CTX, $SH, "-c", $CMD)
+          - focus-metavariable: $CMD
+
+  - id: gap-go-ssrf
+    mode: taint
+    languages: [go]
+    severity: ERROR
+    message: "CWE-918 SSRF: URL для исходящего запроса берётся из данных запроса. Разрешайте только allow-list хостов/адресов, запретите внутренние диапазоны и редиректы на них."
+    metadata: {cwe: "CWE-918", owasp: "A10:2021"}
+    pattern-sources: *src
+    pattern-sinks:
+      - pattern: http.Get(...)
+      - pattern: http.Head(...)
+      - pattern: http.Post(...)
+      - pattern: http.PostForm(...)
+      - patterns:
+          - pattern-either:
+              - pattern: http.NewRequest($M, $U, ...)
+              - pattern: http.NewRequestWithContext($C, $M, $U, ...)
+          - focus-metavariable: $U
+      - pattern: "($CLIENT : *http.Client).Get(...)"
+      - pattern: "($CLIENT : *http.Client).Post(...)"
+
+  - id: gap-go-path-traversal
+    mode: taint
+    languages: [go]
+    severity: ERROR
+    message: "CWE-22 path traversal: путь к файлу строится из данных запроса (filepath.Join без очистки). Очистите filepath.Clean и проверьте, что результат остаётся внутри базового каталога (strings.HasPrefix)."
+    metadata: {cwe: "CWE-22", owasp: "A01:2021"}
+    pattern-sources: *src
+    pattern-sinks:
+      - pattern: os.Open(...)
+      - pattern: os.OpenFile(...)
+      - pattern: os.ReadFile(...)
+      - pattern: os.Create(...)
+      - pattern: ioutil.ReadFile(...)
+    pattern-sanitizers:
+      # filepath.Clean сам по себе не доказывает безопасность, но в безопасном коде он идёт в паре с проверкой префикса;
+      # его наличие снимает taint и глушит ложное срабатывание на безопасном эквиваленте
+      - pattern: filepath.Clean(...)
+
+  - id: gap-go-weak-hash-password
+    languages: [go]
+    severity: WARNING
+    message: "CWE-327 слабая криптография: MD5/SHA-1 непригодны для хеширования паролей (быстрые, уязвимы к перебору/коллизиям). Используйте bcrypt/scrypt/argon2 (для паролей) или SHA-256+ (для целостности)."
+    metadata: {cwe: "CWE-327", owasp: "A02:2021", note: "эвристика: срабатывает на любое использование md5/sha1, проверьте назначение"}
+    pattern-either:
+      - pattern: md5.New()
+      - pattern: md5.Sum(...)
+      - pattern: sha1.New()
+      - pattern: sha1.Sum(...)
+
+  - id: gap-go-hardcoded-secret
+    languages: [go]
+    severity: ERROR
+    message: "CWE-798: пароль, ключ или токен задан строковым литералом. Читайте из переменных окружения/секрет-хранилища; если значение было в git — отзовите и ротируйте."
+    metadata: {cwe: "CWE-798", owasp: "A07:2021", note: "по имени переменной; значения-заглушки (${...}, <...>, пусто) исключены"}
+    patterns:
+      - pattern-either:
+          - pattern: const $NAME = "$VAL"
+          - pattern: var $NAME = "$VAL"
+          - pattern: $NAME := "$VAL"
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i).*(pass(word|wd|phrase)?|pwd|secret|api_?key|token|credential|private_?key).*
+      - metavariable-regex:
+          metavariable: $VAL
+          regex: ^(?!\$\{)(?!<)(?!\*+$)(?!x+$).{4,}$

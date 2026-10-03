@@ -231,7 +231,12 @@ def _hit_matches(e: Expected, h: ScanHit) -> bool:
     return True
 
 
-def score(expected: list[Expected], safe_files: list[str], hits: list[ScanHit]) -> Score:
+def score(expected: list[Expected], safe_files: list[str], hits: list[ScanHit],
+          only_ruled: bool = False) -> Score:
+    # only_ruled: оценивать лишь находки с заданным `rule:` (наши gaps-правила);
+    # классы без rule покрываются реестром Semgrep и не относятся к gaps-прогону.
+    if only_ruled:
+        expected = [e for e in expected if e.rule]
     s = Score()
     used: set[int] = set()
     safe_set = set(safe_files)
@@ -245,15 +250,32 @@ def score(expected: list[Expected], safe_files: list[str], hits: list[ScanHit]) 
             used.add(idx)
             s.tp += 1
             s.matched.append(f"{e.file}:{e.line} {e.cwe}")
-    # FP: любые срабатывания на safe-файлах + не использованные срабатывания на
-    # файлах, где есть ground-truth (срабатывание не у заявленного места/класса).
-    gt_files = {e.file for e in expected}
+    # FP: срабатывание на safe-файле — всегда FP. Срабатывание на gt-файле — FP
+    # ТОЛЬКО если оно не со-локализовано ни с одной известной уязвимой строкой
+    # (±tolerance): второе правило, подсветившее ту же уязвимую строку (напр.
+    # и языковое, и общее правило на один хардкод-секрет), — это дубль TP, а не
+    # ложное срабатывание; местоположение реально уязвимо.
+    gt_by_file: dict[str, list[Expected]] = {}
+    for e in expected:
+        gt_by_file.setdefault(e.file, []).append(e)
     for i, h in enumerate(hits):
         if i in used:
             continue
-        if h.file in safe_set or h.file in gt_files:
+        if h.file in safe_set:
             s.fp += 1
-            s.spurious.append(f"{h.file}:{h.line} {h.rule or h.cwe or '?'}")
+            s.spurious.append(f"{h.file}:{h.line} {h.rule or h.cwe or '?'} [safe-файл]")
+            continue
+        gts = gt_by_file.get(h.file)
+        if gts is None:
+            continue  # файл вне разметки — не оцениваем (ни TP, ни FP)
+        # дубль того же КЛАССА на известной уязвимой строке (±tol) — не FP:
+        # напр. и языковое, и общее правило подсветили один хардкод-секрет.
+        near_same = any(abs(h.line - e.line) <= LINE_TOLERANCE
+                        and (h.cwe is None or h.cwe == e.cwe) for e in gts)
+        if near_same:
+            continue
+        s.fp += 1
+        s.spurious.append(f"{h.file}:{h.line} {h.rule or h.cwe or '?'} [мислейбл/не на уязв. строке]")
     return s
 
 
@@ -394,6 +416,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--manifest", type=Path, help="ground-truth YAML (tests/ground_truth/*.yml)")
     ap.add_argument("--scan", type=Path, help="вывод сканера (JSON Semgrep или SARIF)")
     ap.add_argument("--format", choices=["semgrep", "sarif"], default="sarif")
+    ap.add_argument("--only-ruled", action="store_true",
+                    help="оценивать только находки с rule: (прогон собственных gaps-правил)")
     ap.add_argument("--self-test", action="store_true", help="проверка логики без внешних инструментов")
     args = ap.parse_args(argv)
 
@@ -409,8 +433,8 @@ def main(argv: list[str] | None = None) -> int:
     except GroundTruthError as ex:
         print(f"ОШИБКА ДАННЫХ: {ex}", file=sys.stderr)
         return 2
-    s = score(expected, safe, hits)
-    print(format_report(s, args.manifest.stem))
+    s = score(expected, safe, hits, only_ruled=args.only_ruled)
+    print(format_report(s, args.manifest.stem + (" [only-ruled]" if args.only_ruled else "")))
     return 0
 
 

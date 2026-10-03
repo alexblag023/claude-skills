@@ -1,0 +1,159 @@
+rules:
+  # Ruby/Rails/Sinatra: taint-правила с источниками Rails/Sinatra (params[...], request.params, cookies[...],
+  # request.body.read). Закрывают классы source->sink, которые Brakeman (Rails-ориентирован) либо реестровые
+  # правила Semgrep OSS (p/ruby, p/security-audit) могут пропускать вне стандартного Rails-контекста:
+  # внедрение SQL/команд, XSS через raw/html_safe, обход пути, небезопасная десериализация, слабая крипто,
+  # open redirect. Brakeman хорошо покрывает каноничный Rails — здесь фокус именно на связке source->sink,
+  # чтобы не зависеть от распознавания фреймворка. Общий набор источников задан якорем &src.
+
+  - id: gap-ruby-sql-injection
+    mode: taint
+    languages: [ruby]
+    severity: ERROR
+    message: "CWE-89: данные запроса попадают в SQL строкой (интерполяция в where/execute/find_by_sql). Используйте плейсхолдеры: where(\"col = ?\", value) или именованные бинды, а не #{...} в строке запроса."
+    metadata: {cwe: "CWE-89", owasp: "A03:2021"}
+    pattern-sources: &src
+      - pattern: params[...]
+      - pattern: params[$K]
+      - pattern: params.fetch(...)
+      - pattern: request.params[...]
+      - pattern: request.params
+      - pattern: request.query_parameters[...]
+      - pattern: cookies[...]
+      - pattern: cookies[$K]
+      - pattern: request.body.read
+    pattern-sinks:
+      # focus на строке запроса: параметризованная форма where("col = ?", params[:x]) чиста,
+      # т.к. первый аргумент — чистый литерал, а tainted идёт отдельным аргументом-бинда
+      - patterns:
+          - pattern: $M.where($SQL, ...)
+          - focus-metavariable: $SQL
+      - patterns:
+          - pattern: $M.find_by_sql($SQL)
+          - focus-metavariable: $SQL
+      - patterns:
+          - pattern: $M.order($SQL)
+          - focus-metavariable: $SQL
+      - patterns:
+          - pattern: $C.execute($SQL)
+          - focus-metavariable: $SQL
+      - patterns:
+          - pattern: $C.exec_query($SQL)
+          - focus-metavariable: $SQL
+    pattern-sanitizers:
+      - pattern: Integer(...)
+      - pattern: $X.to_i
+
+  - id: gap-ruby-command-injection
+    mode: taint
+    languages: [ruby]
+    severity: ERROR
+    message: "CWE-78: данные запроса попадают в system/exec/бэктики/%x/Open3 одной строкой (идёт через оболочку). Передавайте фиксированную команду и аргументы массивом: system(\"cmd\", arg1, arg2) или Open3.capture2(\"cmd\", arg)."
+    metadata: {cwe: "CWE-78", owasp: "A03:2021"}
+    pattern-sources: *src
+    pattern-sinks:
+      # одноаргументная форма идёт через /bin/sh -c; argv-форма system("cmd", arg) безопасна и сюда не попадает
+      - patterns:
+          - pattern: system($CMD)
+          - focus-metavariable: $CMD
+      - patterns:
+          - pattern: exec($CMD)
+          - focus-metavariable: $CMD
+      - patterns:
+          - pattern: IO.popen($CMD)
+          - focus-metavariable: $CMD
+      - patterns:
+          - pattern: Open3.capture2($CMD)
+          - focus-metavariable: $CMD
+      - patterns:
+          - pattern: Open3.capture3($CMD)
+          - focus-metavariable: $CMD
+      - patterns:
+          - pattern: Open3.popen3($CMD)
+          - focus-metavariable: $CMD
+      - pattern: "`...`"
+      - pattern: "%x(...)"
+    pattern-sanitizers:
+      - pattern: Integer(...)
+      - pattern: $X.to_i
+      - pattern: Shellwords.escape(...)
+
+  - id: gap-ruby-xss
+    mode: taint
+    languages: [ruby]
+    severity: ERROR
+    message: "CWE-79 XSS: данные запроса выводятся как HTML через raw/html_safe без экранирования. Выводите обычным интерполятором ERB (автоэкранирование) либо применяйте ERB::Util.html_escape / h(...)."
+    metadata: {cwe: "CWE-79", owasp: "A03:2021"}
+    pattern-sources: *src
+    pattern-sinks:
+      - pattern: raw(...)
+      - pattern: $X.html_safe
+      - pattern: html_safe(...)
+    pattern-sanitizers:
+      - pattern: ERB::Util.html_escape(...)
+      - pattern: ERB::Util.h(...)
+      - pattern: CGI.escapeHTML(...)
+      - pattern: h(...)
+      - pattern: sanitize(...)
+
+  - id: gap-ruby-path-traversal
+    mode: taint
+    languages: [ruby]
+    severity: ERROR
+    message: "CWE-22 обход пути: данные запроса попадают в File.read/File.open/IO.read без очистки. Берите только File.basename и сверяйте с allow-list, не склеивайте путь из ввода."
+    metadata: {cwe: "CWE-22", owasp: "A01:2021"}
+    pattern-sources: *src
+    pattern-sinks:
+      - pattern: File.read(...)
+      - pattern: File.open(...)
+      - pattern: File.new(...)
+      - pattern: File.readlines(...)
+      - pattern: IO.read(...)
+      - pattern: IO.readlines(...)
+    pattern-sanitizers:
+      - pattern: File.basename(...)
+
+  - id: gap-ruby-unsafe-deserialization
+    mode: taint
+    languages: [ruby]
+    severity: ERROR
+    message: "CWE-502 небезопасная десериализация: ввод передан в Marshal.load/YAML.load (позволяют создавать произвольные объекты и вести к RCE). Используйте YAML.safe_load или JSON.parse."
+    metadata: {cwe: "CWE-502", owasp: "A08:2021"}
+    pattern-sources: *src
+    pattern-sinks:
+      - pattern: Marshal.load(...)
+      - pattern: Marshal.restore(...)
+      - pattern: YAML.load(...)
+      - pattern: YAML.unsafe_load(...)
+      - pattern: Psych.load(...)
+      - pattern: Psych.unsafe_load(...)
+
+  - id: gap-ruby-weak-hash
+    languages: [ruby]
+    severity: WARNING
+    message: "CWE-327 слабый алгоритм хеширования (MD5/SHA1). Для паролей используйте bcrypt/scrypt/argon2 (BCrypt::Password.create), для прочих целей — SHA-256/SHA-512."
+    metadata: {cwe: "CWE-327", owasp: "A02:2021", note: "эвристика: срабатывает на любое использование MD5/SHA1, проверьте назначение (особенно хеширование паролей)"}
+    pattern-either:
+      - pattern: Digest::MD5.hexdigest(...)
+      - pattern: Digest::MD5.digest(...)
+      - pattern: Digest::MD5.base64digest(...)
+      - pattern: Digest::MD5.new
+      - pattern: Digest::SHA1.hexdigest(...)
+      - pattern: Digest::SHA1.digest(...)
+      - pattern: Digest::SHA1.base64digest(...)
+      - pattern: Digest::SHA1.new
+      - pattern: OpenSSL::Digest::MD5.new
+      - pattern: OpenSSL::Digest::SHA1.new
+      - pattern: OpenSSL::Digest.new("MD5")
+      - pattern: OpenSSL::Digest.new("SHA1")
+
+  - id: gap-ruby-open-redirect
+    mode: taint
+    languages: [ruby]
+    severity: WARNING
+    message: "CWE-601 open redirect: адрес перенаправления берётся из запроса. Допускайте только относительные пути (redirect_to с only_path) или allow-list внутренних маршрутов."
+    metadata: {cwe: "CWE-601", owasp: "A01:2021", note: "по политике скила не блокер без высокой уверенности"}
+    pattern-sources: *src
+    pattern-sinks:
+      - pattern: redirect_to(...)
+      - pattern: redirect(...)
