@@ -108,6 +108,19 @@
 
 Ground-truth — декларативный манифест `tests/ground_truth/gaps.yml` (file+cwe+line+anchor+rule). `score.py` считает TP/FP/FN/precision/recall по выводу Semgrep (JSON) или SARIF; **защита от дрейфа строк**: `verify_anchors` падает, если якорь-подстрока уехал/исчез. Дубль того же класса на уже-уязвимой строке не считается FP. `run_eval_tests.py` (self-test + проверка якорей) — без внешних инструментов, в CI. Полный precision/recall — с установленным Semgrep (или через Docker-образ).
 
+## Межфайловый taint (эксперт CodeQL №5)
+
+Semgrep OSS связывает source→sink только внутри одного файла/метода. Межфайловые цепочки закрывает отдельный эксперт CodeQL (межпроцедурный CPG) — `references/codeql_crossfile.md`, промпт в `analysis_experts.md` (Эксперт 5).
+
+Разрыв подтверждён живым прогоном (Docker `semgrep/semgrep:latest`, 2026-10-03) на `tests/crossfile_corpus/` (source `request.args` → sink `cursor.execute("..."+uid)` в другом файле):
+
+| Прогон OSS Semgrep (p/python) | Находок |
+|---|---|
+| Та же уязвимость в ОДНОМ файле | 2 |
+| Межфайловая (2 файла) | **0** |
+
+CodeQL (когда установлен / через движок `codeql` платформы) эту цепочку находит; SARIF вливается в дедуп Шага 3. CodeQL не входит в бандл (лицензия — `THIRD_PARTY.md`); при отсутствии эксперт даёт `MANUAL`, не `PASS`. **Прогон самого CodeQL в этой среде не выполнялся** (не установлен) — доказан лишь разрыв Semgrep OSS, который CodeQL закрывает.
+
 ## Что даёт бандл скила и что требует установки
 - В скиле (тестируется): `csrf_template_lint.py`, `rules/semgrep/gaps.yml`, `ingest_external_report.py`.
 - IaC/Dockerfile: KICS (Checkmarx) прогнан на `tests/iac_corpus/` (Dockerfile, Pod, Terraform) — 37 находок, из них 6 High/Critical (S3 ACL public-read, privileged-контейнер, root, SSH 0.0.0.0/0); Checkov/hadolint/Trivy config не прогонялись.
