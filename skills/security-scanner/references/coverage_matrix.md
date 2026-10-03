@@ -91,6 +91,23 @@
 
 Воспроизведение: `git clone https://github.com/veracode/verademo`; `semgrep scan --config p/java --config p/security-audit --config p/owasp-top-ten --config p/command-injection --config p/sql-injection --config p/xss app` и `semgrep scan --config <скил>/rules/semgrep/gaps_java.yml app`; сверка с `docs/scan_results/results.json` — `scripts/ingest_external_report.py`.
 
+## Расширение языков: C#, PHP, Go, Ruby (gaps-правила)
+
+Добавлены собственные gaps-правила на ключевые классы для C#, PHP, Go, Ruby — закрывают разрыв, где реестровые правила Semgrep OSS не связывают source→sink (аналогично истории с Java). По одному каноническому уязвимому примеру на класс + безопасный эквивалент.
+
+| Язык | Файл правил | Классы | Прогон |
+|---|---|---|---|
+| C# | `rules/semgrep/gaps_csharp.yml` | CWE-89/78/79/22/502/327/798 (7) | ✔ |
+| PHP | `rules/semgrep/gaps_php.yml` | CWE-89/78/79/22/502/327/798 (7) | ✔ |
+| Go | `rules/semgrep/gaps_go.yml` | CWE-89/78/918/22/327/798 (6) | ✔ |
+| Ruby | `rules/semgrep/gaps_ruby.yml` | CWE-89/78/79/22/502/327/601 (7) | ✔ |
+
+**Эмпирический eval (все gaps-правила, Semgrep 1.x через Docker `semgrep/semgrep:latest`, корпус 74 уязвимых + 46 safe, прогон 2026-10-03):** по размеченным находкам с собственным правилом (`tests/ground_truth/gaps.yml`, 51 шт.) — **recall = 1.000** (51/51), **precision = 0.944** (3 FP), parse-ошибок 0, ложных срабатываний на safe-корпусе 0. 3 FP — доковырочная неточность существующих java-правил (`gap-java-xss-responsebody` на format-string-файлах, `gap-java-hardcoded-password-var`), кандидат на отдельную правку; к новым языкам FP не относятся. Воспроизведение — `tests/score.py --manifest tests/ground_truth/gaps.yml --scan <semgrep.json> --format semgrep --only-ruled`.
+
+## Eval-харнесс precision/recall (tests/score.py)
+
+Ground-truth — декларативный манифест `tests/ground_truth/gaps.yml` (file+cwe+line+anchor+rule). `score.py` считает TP/FP/FN/precision/recall по выводу Semgrep (JSON) или SARIF; **защита от дрейфа строк**: `verify_anchors` падает, если якорь-подстрока уехал/исчез. Дубль того же класса на уже-уязвимой строке не считается FP. `run_eval_tests.py` (self-test + проверка якорей) — без внешних инструментов, в CI. Полный precision/recall — с установленным Semgrep (или через Docker-образ).
+
 ## Что даёт бандл скила и что требует установки
 - В скиле (тестируется): `csrf_template_lint.py`, `rules/semgrep/gaps.yml`, `ingest_external_report.py`.
 - IaC/Dockerfile: KICS (Checkmarx) прогнан на `tests/iac_corpus/` (Dockerfile, Pod, Terraform) — 37 находок, из них 6 High/Critical (S3 ACL public-read, privileged-контейнер, root, SSH 0.0.0.0/0); Checkov/hadolint/Trivy config не прогонялись.

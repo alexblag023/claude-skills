@@ -18,37 +18,18 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-RULES = [HERE.parent / 'rules' / 'semgrep' / 'gaps.yml', HERE.parent / 'rules' / 'semgrep' / 'gaps_java.yml']
+RULES = [HERE.parent / 'rules' / 'semgrep' / name for name in (
+    'gaps.yml', 'gaps_java.yml', 'gaps_csharp.yml', 'gaps_php.yml', 'gaps_go.yml', 'gaps_ruby.yml')]
 BAD, SAFE = HERE / 'vuln_corpus', HERE / 'vuln_corpus_safe'
 
-# файл корпуса -> правило gaps.yml, которое обязано сработать
-EXPECTED = {
-    'cwe079_dom_xss.js': 'gap-dom-xss-innerhtml',
-    'cwe362_race_toctou.py': 'gap-toctou-exists-then-open',
-    'cwe400_regex_dos.py': 'gap-regex-dos-user-pattern',
-    'cwe434_upload.py': 'gap-upload-unsanitized-filename',
-    'cwe476_null.c': 'gap-c-malloc-use-without-null-check',
-    'cwe502_yaml.py': 'gap-yaml-load-unsafe',
-    'cwe601_open_redirect.py': 'gap-open-redirect',
-    'cwe611_xxe.py': 'gap-xxe-lxml-resolve-entities',
-    'cwe798_hardcoded_secret.py': 'gap-hardcoded-secret-assignment',
-    'cwe862_missing_authz.py': 'gap-flask-admin-route-without-auth',
-    # Java/Spring (gaps_java.yml)
-    'cwe078_java_exec.java': 'gap-java-exec-shell-dynamic',
-    'cwe079_java_xss_responsebody.java': 'gap-java-xss-responsebody',
-    'cwe113_java_crlf.java': 'gap-java-crlf-header-cookie',
-    'cwe117_java_logforging.java': 'gap-java-log-forging',
-    'cwe134_java_format.java': 'gap-java-format-string',
-    'cwe330_java_random.java': 'gap-java-insecure-random',
-    'cwe470_java_reflection.java': 'gap-java-unsafe-reflection',
-    'cwe601_java_redirect.java': 'gap-java-open-redirect',
-    'cwe501_java_trust_boundary.java': 'gap-java-trust-boundary-session',
-    'cwe209_java_error_leak.java': 'gap-java-error-info-leak',
-    'cwe259_java_password_field.java': 'gap-java-hardcoded-password-var',
-    'cwe798_java_password_call.java': 'gap-java-hardcoded-password-call',
-    'cwe798_java_default_creds.java': 'gap-java-default-credentials',
-    'cwe134_java_implicit_param.java': 'gap-java-format-string',  # неявная привязка Spring без @RequestParam
-}
+# EXPECTED (файл корпуса -> правило gap-*, которое обязано сработать) берётся из
+# единого источника истины — манифеста tests/ground_truth/gaps.yml (его findings
+# с заданным `rule:`). Так регресс-тест и eval-харнесс не расходятся.
+sys.path.insert(0, str(HERE))
+from score import load_manifest  # noqa: E402
+
+_expected_list, _, _, _ = load_manifest(HERE / 'ground_truth' / 'gaps.yml')
+EXPECTED = {e.file: e.rule for e in _expected_list if e.rule}
 
 
 def scan(semgrep: str, target: Path) -> dict:
