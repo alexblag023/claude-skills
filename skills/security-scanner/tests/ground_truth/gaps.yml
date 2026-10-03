@@ -223,6 +223,141 @@ findings:
     cwe: CWE-918
     line: 4
     anchor: "requests.get(request.args['url'])"
+  - file: cwe089_csharp_sqli.cs
+    cwe: CWE-89
+    rule: gap-csharp-sql-injection
+    line: 15
+    anchor: "var cmd = new SqlCommand(\"SELECT * FROM Users WH"
+  - file: cwe078_csharp_cmd.cs
+    cwe: CWE-78
+    rule: gap-csharp-command-injection
+    line: 13
+    anchor: "psi.Arguments = \"/c ping \" + host;"
+  - file: cwe079_csharp_xss.cs
+    cwe: CWE-79
+    rule: gap-csharp-xss-reflected
+    line: 12
+    anchor: "await Response.WriteAsync(\"<h1>Results for \" + q"
+  - file: cwe022_csharp_pathtraversal.cs
+    cwe: CWE-22
+    rule: gap-csharp-path-traversal
+    line: 14
+    anchor: "string content = File.ReadAllText(Path.Combine(R"
+  - file: cwe502_csharp_deserialization.cs
+    cwe: CWE-502
+    rule: gap-csharp-unsafe-deserialization
+    line: 15
+    anchor: "object obj = formatter.Deserialize(ms);"
+  - file: cwe327_csharp_weakcrypto.cs
+    cwe: CWE-327
+    rule: gap-csharp-weak-crypto
+    line: 12
+    anchor: "using var md5 = MD5.Create();"
+  - file: cwe798_csharp_secret.cs
+    cwe: CWE-798
+    rule: gap-csharp-hardcoded-secret
+    line: 7
+    anchor: "private const string ApiKey ="
+  - file: cwe089_php_sqli.php
+    cwe: CWE-89
+    rule: gap-php-sql-injection
+    line: 5
+    anchor: "$result = mysqli_query($conn, \"SELECT * FROM use"
+  - file: cwe078_php_cmd.php
+    cwe: CWE-78
+    rule: gap-php-command-injection
+    line: 4
+    anchor: "$output = shell_exec(\"ping -c 1 \" . $host);"
+  - file: cwe079_php_xss.php
+    cwe: CWE-79
+    rule: gap-php-xss-echo
+    line: 4
+    anchor: "echo \"<h1>Hello, \" . $name . \"</h1>\";"
+  - file: cwe022_php_lfi.php
+    cwe: CWE-22
+    rule: gap-php-path-traversal
+    line: 4
+    anchor: "include \"/var/www/pages/\" . $page;"
+  - file: cwe502_php_unserialize.php
+    cwe: CWE-502
+    rule: gap-php-unsafe-deserialization
+    line: 3
+    anchor: "$prefs = unserialize($_COOKIE['prefs']);"
+  - file: cwe327_php_weak_hash.php
+    cwe: CWE-327
+    rule: gap-php-weak-hash-password
+    line: 4
+    anchor: "$hash = md5($password);"
+  - file: cwe798_php_hardcoded_secret.php
+    cwe: CWE-798
+    rule: gap-php-hardcoded-secret
+    line: 3
+    anchor: "$db_password = \"S3cr3tP@ss2024\";"
+  - file: cwe089_go_sqli.go
+    cwe: CWE-89
+    rule: gap-go-sql-injection
+    line: 13
+    anchor: "rows, err := db.Query(fmt.Sprintf(\"SELECT * FROM"
+  - file: cwe078_go_cmdi.go
+    cwe: CWE-78
+    rule: gap-go-os-command-injection
+    line: 10
+    anchor: "out, err := exec.Command(\"sh\", \"-c\", \"ping -c1 \""
+  - file: cwe918_go_ssrf.go
+    cwe: CWE-918
+    rule: gap-go-ssrf
+    line: 9
+    anchor: "resp, err := http.Get(r.URL.Query().Get(\"url\"))"
+  - file: cwe022_go_path_traversal.go
+    cwe: CWE-22
+    rule: gap-go-path-traversal
+    line: 13
+    anchor: "f, err := os.Open(filepath.Join(baseDir, r.URL.Q"
+  - file: cwe327_go_weak_hash.go
+    cwe: CWE-327
+    rule: gap-go-weak-hash-password
+    line: 11
+    anchor: "h := md5.New()"
+  - file: cwe798_go_hardcoded_secret.go
+    cwe: CWE-798
+    rule: gap-go-hardcoded-secret
+    line: 5
+    anchor: "const apiPassword = \"S3cr3t-Prod-Value!\""
+  - file: cwe089_ruby_sqli.rb
+    cwe: CWE-89
+    rule: gap-ruby-sql-injection
+    line: 5
+    anchor: "@users = User.where(\"name = '#{name}'\")"
+  - file: cwe078_ruby_command.rb
+    cwe: CWE-78
+    rule: gap-ruby-command-injection
+    line: 6
+    anchor: "system(\"ping -c1 #{host}\")"
+  - file: cwe079_ruby_xss.rb
+    cwe: CWE-79
+    rule: gap-ruby-xss
+    line: 5
+    anchor: "@html = raw(comment)"
+  - file: cwe022_ruby_path_traversal.rb
+    cwe: CWE-22
+    rule: gap-ruby-path-traversal
+    line: 5
+    anchor: "content = File.read(\"/var/data/\" + name)"
+  - file: cwe502_ruby_deserialization.rb
+    cwe: CWE-502
+    rule: gap-ruby-unsafe-deserialization
+    line: 6
+    anchor: "data = YAML.load(request.body.read)"
+  - file: cwe327_ruby_weak_hash.rb
+    cwe: CWE-327
+    rule: gap-ruby-weak-hash
+    line: 6
+    anchor: "Digest::MD5.hexdigest(password)"
+  - file: cwe601_ruby_open_redirect.rb
+    cwe: CWE-601
+    rule: gap-ruby-open-redirect
+    line: 5
+    anchor: "redirect_to(target)"
 safe:
   - safe_authz.py
   - safe_dom.js
@@ -243,3 +378,30 @@ safe:
   - safe_upload.py
   - safe_xxe.py
   - safe_yaml.py
+  - safe_csharp_cmd.cs
+  - safe_csharp_deserialization.cs
+  - safe_csharp_pathtraversal.cs
+  - safe_csharp_secret.cs
+  - safe_csharp_sqli.cs
+  - safe_csharp_weakcrypto.cs
+  - safe_csharp_xss.cs
+  - safe_go_cmd.go
+  - safe_go_hash.go
+  - safe_go_path.go
+  - safe_go_secret.go
+  - safe_go_sqli.go
+  - safe_go_ssrf.go
+  - safe_php_cmd.php
+  - safe_php_hash.php
+  - safe_php_lfi.php
+  - safe_php_secret.php
+  - safe_php_sqli.php
+  - safe_php_unserialize.php
+  - safe_php_xss.php
+  - safe_ruby_command.rb
+  - safe_ruby_deserialization.rb
+  - safe_ruby_open_redirect.rb
+  - safe_ruby_path_traversal.rb
+  - safe_ruby_sqli.rb
+  - safe_ruby_weak_hash.rb
+  - safe_ruby_xss.rb

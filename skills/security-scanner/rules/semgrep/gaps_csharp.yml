@@ -1,0 +1,179 @@
+rules:
+  # C#/ASP.NET: taint- и pattern-правила с источниками ASP.NET Core MVC и классического ASP.NET.
+  # Закрывают классы, которые реестровые правила Semgrep OSS (p/csharp, p/security-audit, p/owasp-top-ten)
+  # пропускают или находят неполно: SQL-инъекция через конкатенацию/интерполяцию в SqlCommand,
+  # внедрение команд через Process.Start/ProcessStartInfo.Arguments, отражённый XSS (Response.Write/Html.Raw),
+  # обход пути (File.*/Path.Combine), небезопасная десериализация (BinaryFormatter/LosFormatter/TypeNameHandling),
+  # слабая криптография (MD5/SHA1), секрет в коде.
+  # Правила общие (без привязки к конкретному приложению); общий набор источников задан якорем &src.
+  # Источники: параметры controller-action с [FromQuery]/[FromBody]/[FromRoute]/[FromForm] и прямой доступ
+  # к Request.Query/Form/Params/QueryString/RouteValues (ASP.NET Core и классический ASP.NET/WebForms).
+
+  - id: gap-csharp-sql-injection
+    mode: taint
+    languages: [csharp]
+    severity: ERROR
+    message: "CWE-89: данные запроса попадают в SQL через конкатенацию или интерполяцию строки в SqlCommand/CommandText. Используйте параметры (cmd.Parameters.AddWithValue) или ORM, не стройте SQL из ввода."
+    metadata: {cwe: "CWE-89", owasp: "A03:2021"}
+    pattern-sources: &src
+      # Параметр controller-action как источник (ASP.NET Core model binding).
+      # Форма без атрибута парсится надёжно; focus сужает источник до самого параметра.
+      - patterns:
+          - pattern: public $RET $M(..., string $SRC, ...) { ... }
+          - focus-metavariable: $SRC
+      - pattern: Request.Query[$K]
+      - pattern: Request.Form[$K]
+      - pattern: Request.Params[$K]
+      - pattern: Request.QueryString[$K]
+      - pattern: Request.RouteValues[$K]
+      - pattern: Request[$K]
+      - pattern: $CTX.Request.Query[$K]
+      - pattern: $CTX.Request.Form[$K]
+      - pattern: $CTX.Request.QueryString[$K]
+    pattern-sinks:
+      - pattern: new SqlCommand($SQL, ...)
+      - pattern: new SqlCommand($SQL)
+      - pattern: new System.Data.SqlClient.SqlCommand($SQL, ...)
+      - pattern: new OleDbCommand($SQL, ...)
+      - pattern: new MySqlCommand($SQL, ...)
+      - pattern: new NpgsqlCommand($SQL, ...)
+      - pattern: new SqlDataAdapter($SQL, ...)
+      - pattern: $CMD.CommandText = $SQL
+      - pattern: $DB.ExecuteSqlRaw($SQL, ...)
+      - pattern: $DB.ExecuteSqlRawAsync($SQL, ...)
+      - pattern: $DB.FromSqlRaw($SQL, ...)
+    pattern-sanitizers:
+      - pattern: System.Int32.Parse(...)
+      - pattern: System.Int64.Parse(...)
+      - pattern: System.Guid.Parse(...)
+      - pattern: Guid.Parse(...)
+
+  - id: gap-csharp-command-injection
+    mode: taint
+    languages: [csharp]
+    severity: ERROR
+    message: "CWE-78: данные запроса попадают в Process.Start/ProcessStartInfo.Arguments. Не собирайте команду или аргументы из ввода и не запускайте `cmd /c`/`sh -c`: фиксированный исполняемый файл + аргументы из allow-list."
+    metadata: {cwe: "CWE-78", owasp: "A03:2021"}
+    pattern-sources: *src
+    pattern-sinks:
+      - pattern: System.Diagnostics.Process.Start(...)
+      - pattern: Process.Start(...)
+      - pattern: $PSI.Arguments = $A
+      - pattern: $PSI.FileName = $A
+      - pattern: new ProcessStartInfo($A, ...)
+      - pattern: new ProcessStartInfo(...) { ..., Arguments = $A, ... }
+      - pattern: new System.Diagnostics.ProcessStartInfo($A, ...)
+    pattern-sanitizers:
+      - pattern: System.Int32.Parse(...)
+      - pattern: System.Int64.Parse(...)
+
+  - id: gap-csharp-xss-reflected
+    mode: taint
+    languages: [csharp]
+    severity: ERROR
+    message: "CWE-79 XSS: данные запроса выводятся клиенту через Response.Write/HttpResponse.WriteAsync/Html.Raw без кодирования. Используйте HtmlEncoder.Encode или шаблонизатор с автоэкранированием (не Html.Raw)."
+    metadata: {cwe: "CWE-79", owasp: "A03:2021"}
+    pattern-sources: *src
+    pattern-sinks:
+      - pattern: Response.Write(...)
+      - pattern: $RESP.Write(...)
+      - pattern: Response.WriteAsync(...)
+      - pattern: $RESP.WriteAsync(...)
+      - pattern: HttpContext.Response.WriteAsync(...)
+      - pattern: Html.Raw(...)
+      - pattern: $HTML.Raw(...)
+      - pattern: new HtmlString(...)
+      - pattern: new MvcHtmlString(...)
+    pattern-sanitizers:
+      - pattern: HttpUtility.HtmlEncode(...)
+      - pattern: WebUtility.HtmlEncode(...)
+      - pattern: $ENC.Encode(...)
+      - pattern: System.Int32.Parse(...)
+
+  - id: gap-csharp-path-traversal
+    mode: taint
+    languages: [csharp]
+    severity: ERROR
+    message: "CWE-22 path traversal: имя файла из запроса попадает в File.*/Path.Combine/FileStream без проверки. Приводите к имени через Path.GetFileName и проверяйте, что итоговый путь внутри разрешённого каталога."
+    metadata: {cwe: "CWE-22", owasp: "A01:2021"}
+    pattern-sources: *src
+    pattern-sinks:
+      - pattern: System.IO.File.ReadAllText(...)
+      - pattern: File.ReadAllText(...)
+      - pattern: File.ReadAllBytes(...)
+      - pattern: File.ReadAllLines(...)
+      - pattern: File.OpenRead(...)
+      - pattern: File.OpenText(...)
+      - pattern: File.WriteAllText(...)
+      - pattern: File.WriteAllBytes(...)
+      - pattern: File.Delete(...)
+      - pattern: Path.Combine(...)
+      - pattern: new FileStream($P, ...)
+      - pattern: new StreamReader($P, ...)
+    pattern-sanitizers:
+      - pattern: Path.GetFileName(...)
+      - pattern: System.IO.Path.GetFileName(...)
+
+  - id: gap-csharp-unsafe-deserialization
+    languages: [csharp]
+    severity: ERROR
+    message: "CWE-502 небезопасная десериализация: BinaryFormatter/LosFormatter/NetDataContractSerializer или Json.NET с TypeNameHandling != None допускают выполнение кода через подделанные типы. Используйте System.Text.Json или контрактные сериализаторы без привязки типов из данных."
+    metadata: {cwe: "CWE-502", owasp: "A08:2021"}
+    pattern-either:
+      - pattern: new BinaryFormatter().Deserialize(...)
+      - pattern: (BinaryFormatter $BF).Deserialize(...)
+      - pattern: new LosFormatter().Deserialize(...)
+      - pattern: (LosFormatter $L).Deserialize(...)
+      - pattern: new ObjectStateFormatter().Deserialize(...)
+      - pattern: new NetDataContractSerializer().ReadObject(...)
+      - pattern: new SoapFormatter().Deserialize(...)
+      - patterns:
+          - pattern: $OBJ.TypeNameHandling = TypeNameHandling.$MODE
+          - metavariable-regex:
+              metavariable: $MODE
+              regex: ^(All|Auto|Objects|Arrays)$
+      - patterns:
+          - pattern: new JsonSerializerSettings { ..., TypeNameHandling = TypeNameHandling.$MODE, ... }
+          - metavariable-regex:
+              metavariable: $MODE
+              regex: ^(All|Auto|Objects|Arrays)$
+
+  - id: gap-csharp-weak-crypto
+    languages: [csharp]
+    severity: WARNING
+    message: "CWE-327: MD5/SHA1 криптографически слабы (коллизии). Для хеширования паролей используйте PBKDF2/bcrypt/Argon2, для целостности — SHA-256 и выше."
+    metadata: {cwe: "CWE-327", owasp: "A02:2021", note: "эвристика: срабатывает на любое использование MD5/SHA1, проверьте назначение"}
+    pattern-either:
+      - pattern: MD5.Create(...)
+      - pattern: SHA1.Create(...)
+      - pattern: System.Security.Cryptography.MD5.Create(...)
+      - pattern: System.Security.Cryptography.SHA1.Create(...)
+      - pattern: new MD5CryptoServiceProvider(...)
+      - pattern: new SHA1CryptoServiceProvider(...)
+      - pattern: new MD5Cng(...)
+      - pattern: new SHA1Managed(...)
+      - pattern: HashAlgorithm.Create("MD5")
+      - pattern: HashAlgorithm.Create("SHA1")
+      - pattern: HashAlgorithm.Create("SHA-1")
+
+  - id: gap-csharp-hardcoded-secret
+    languages: [csharp]
+    severity: ERROR
+    message: "CWE-798: пароль, ключ или токен задан строковым литералом. Вынесите в переменные окружения/секрет-хранилище (User Secrets, Key Vault); если значение было в git — отзовите и ротируйте."
+    metadata: {cwe: "CWE-798", owasp: "A07:2021", note: "по имени переменной/поля; значения-заглушки (пусто, ${...}, <...>, x+) исключены"}
+    patterns:
+      - pattern-either:
+          - pattern: string $NAME = "$VAL";
+          - pattern: var $NAME = "$VAL";
+          - pattern: const string $NAME = "$VAL";
+          - pattern: private string $NAME = "$VAL";
+          - pattern: private const string $NAME = "$VAL";
+          - pattern: public const string $NAME = "$VAL";
+          - pattern: private readonly string $NAME = "$VAL";
+          - pattern: static string $NAME = "$VAL";
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i).*(pass(word|wd|phrase)?|pwd|secret|api_?key|apikey|token|credential|conn(ection)?string|private_?key).*
+      - metavariable-regex:
+          metavariable: $VAL
+          regex: ^(?!\$\{)(?!<)(?!\*+$)(?!x+$).{4,}$
