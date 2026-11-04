@@ -18,6 +18,7 @@ import aggregate_votes as agg   # noqa: E402
 import anonymize as anon        # noqa: E402
 import check_run as chk         # noqa: E402
 import dedup_ideas as dedup     # noqa: E402
+import normalize_reviews as norm  # noqa: E402
 import validate_answers as val   # noqa: E402
 
 
@@ -53,8 +54,10 @@ def payload():
             {"cid": "C3", "author_slot": "A3", "family": "f3"},
         ],
         "reviews": [
-            review("R2", "C1", 4, "f2", pairwise=[{"a": "C1", "b": "C2", "winner": "C1"}]),
-            review("R3", "C1", 4, "f3", pairwise=[{"a": "C1", "b": "C2", "winner": "C1"}]),
+            review("R2", "C1", 4, "f2",
+                   pairwise=[{"a": "C1", "b": "C2", "winner": "C1", "consistent": True}]),
+            review("R3", "C1", 4, "f3",
+                   pairwise=[{"a": "C1", "b": "C2", "winner": "C1", "consistent": True}]),
             review("R1", "C2", 2, "f1"),
             review("R3", "C2", 2, "f3"),
             review("R1", "C3", 3, "f1"),
@@ -244,6 +247,81 @@ def test_aggregate_inconsistent_pair_is_a_draw(failed):
     if result["quorum"]["support_for_winner"] < 2:
         failed.append(f"aggregate: несогласованная пара не должна отнимать поддержку: {result['quorum']}")
 
+
+
+
+def test_aggregate_pair_without_reverse_order_is_not_counted(failed):
+    """Пара без подтверждения обратным порядком не даёт предпочтения."""
+    data = payload()
+    for item in data["reviews"]:
+        if item["cid"] == "C1":
+            item["pairwise"] = [{"a": "C1", "b": "C2", "winner": "C1"}]
+    result = agg.compute(data)
+    if result["scores"]["C1"]["P"] != 0.5:
+        failed.append(f"aggregate: пара без consistent не должна считаться: "
+                      f"P={result['scores']['C1']['P']}")
+    if not any("не засчитано" in w for w in result["warnings"]):
+        failed.append(f"aggregate: должно быть предупреждение о незасчитанной паре: "
+                      f"{result['warnings']}")
+
+
+def test_normalize_splits_reviews_by_candidate(failed):
+    """Ответ с разбором по кандидатам превращается в отзыв по каждому."""
+    answer = {
+        "reviews": [
+            {"cid": "C1", "ac_results": {"AC-1": "pass"}, "defects": [], "rubric": rubric(4)},
+            {"cid": "C2", "ac_results": {"AC-1": "fail"}, "defects": [], "rubric": rubric(2)},
+        ],
+        "pairwise": [{"a": "C1", "b": "C2", "winner": "C1"}],
+    }
+    reviews, notes = norm.normalize([("a.json", answer)], "R1", "f1", "critic")
+    if [r["cid"] for r in reviews] != ["C1", "C2"]:
+        failed.append(f"normalize: ожидались отзывы C1 и C2, получено "
+                      f"{[r['cid'] for r in reviews]}")
+    if reviews[0]["rubric"]["correctness"] != 4 or reviews[1]["rubric"]["correctness"] != 2:
+        failed.append("normalize: рубрики кандидатов перепутаны")
+    if not any("обратный порядок не проверен" in n for n in notes):
+        failed.append(f"normalize: должно быть замечание о непроверенном обратном порядке: {notes}")
+
+
+def test_normalize_rejects_global_rubric(failed):
+    """Общая рубрика без привязки к кандидату — отказ, а не догадка."""
+    answer = {"rubric": rubric(4), "pairwise": [{"a": "C1", "b": "C2", "winner": "C1"}]}
+    try:
+        norm.normalize([("a.json", answer)], "R1", "f1", "critic")
+    except norm.ReviewError:
+        return
+    failed.append("normalize: общая рубрика без cid должна отвергаться")
+
+
+def test_normalize_marks_inconsistent_pair(failed):
+    """Вердикт, изменившийся при смене порядка, помечается как ничья."""
+    first = {"reviews": [{"cid": "C1", "ac_results": {}, "defects": [], "rubric": rubric(4)},
+                         {"cid": "C2", "ac_results": {}, "defects": [], "rubric": rubric(2)}],
+             "pairwise": [{"a": "C1", "b": "C2", "winner": "C1"}]}
+    second = {"reviews": [{"cid": "C2", "ac_results": {}, "defects": [], "rubric": rubric(2)},
+                          {"cid": "C1", "ac_results": {}, "defects": [], "rubric": rubric(4)}],
+              "pairwise": [{"a": "C2", "b": "C1", "winner": "C2"}]}
+    reviews, notes = norm.normalize([("first.json", first), ("second.json", second)],
+                                    "R1", "f1", "critic")
+    pair = reviews[0]["pairwise"][0]
+    if pair.get("consistent") is not False:
+        failed.append(f"normalize: изменившийся вердикт должен давать consistent=false: {pair}")
+    if not any("ничьей" in n for n in notes):
+        failed.append(f"normalize: должно быть замечание о ничьей: {notes}")
+
+
+def test_normalize_marks_confirmed_pair(failed):
+    """Одинаковый вердикт в обоих порядках — согласованное предпочтение."""
+    first = {"cid": "C1", "ac_results": {}, "defects": [], "rubric": rubric(4),
+             "pairwise": [{"a": "C1", "b": "C2", "winner": "C1"}]}
+    second = {"cid": "C1", "ac_results": {}, "defects": [], "rubric": rubric(4),
+              "pairwise": [{"a": "C2", "b": "C1", "winner": "C1"}]}
+    reviews, _notes = norm.normalize([("first.json", first), ("second.json", second)],
+                                     "R1", "f1", "critic")
+    if reviews[0]["pairwise"][0].get("consistent") is not True:
+        failed.append(f"normalize: подтвержденный вердикт должен давать consistent=true: "
+                      f"{reviews[0]['pairwise']}")
 
 def test_aggregate_quorum_from_participants(failed):
     """Кворум считается от числа участников: исключение кандидата его не ослабляет."""
@@ -477,6 +555,9 @@ def main() -> int:
         test_aggregate_missing_rubric_warns, test_aggregate_custom_weights,
         test_aggregate_tie_respects_execution, test_aggregate_inconsistent_pair_is_a_draw,
         test_aggregate_quorum_from_participants, test_aggregate_rejects_wrong_types,
+        test_aggregate_pair_without_reverse_order_is_not_counted,
+        test_normalize_splits_reviews_by_candidate, test_normalize_rejects_global_rubric,
+        test_normalize_marks_inconsistent_pair, test_normalize_marks_confirmed_pair,
         test_validate_author, test_validate_critic,
         test_validate_json_extraction, test_validate_blind, test_validate_repair,
         test_anonymize, test_dedup, test_check_run_ok,

@@ -266,6 +266,11 @@ def prefilter(candidates, reviews, verification) -> list[dict]:
     return excluded
 
 
+def pair_key(a: str, b: str) -> str:
+    """Ключ пары, не зависящий от порядка показа."""
+    return "|".join(sorted([a, b]))
+
+
 def supports(review: dict, cid: str, others: list[str]) -> bool:
     """Поддерживает ли ревьюер кандидата: нет critical, correctness >= 3, не beaten."""
     for defect in review.get("defects") or []:
@@ -280,8 +285,10 @@ def supports(review: dict, cid: str, others: list[str]) -> bool:
         winner = str(pair.get("winner") or "")
         if cid not in (a, b):
             continue
-        if pair.get("consistent") is False:
-            # вердикт изменился при смене порядка — пара считается ничьей
+        if pair.get("consistent") is not True:
+            # Предпочтение засчитывается только если обратный порядок его
+            # подтвердил: вердикт, изменившийся при смене порядка, — ничья,
+            # а непроверенная пара не даёт ни предпочтения, ни ничьей.
             continue
         other = b if cid == a else a
         if other in others and winner == other:
@@ -364,6 +371,7 @@ def compute(payload: dict) -> dict:
         raise InputError("delta_tie должен быть неотрицательным числом")
 
     warnings: list[str] = []
+    unverified_pairs: set[str] = set()
     valid_candidates = []
     for candidate in candidates:
         if not isinstance(candidate, dict):
@@ -447,7 +455,9 @@ def compute(payload: dict) -> dict:
                 winner = str(pair.get("winner") or "")
                 if cid not in (a, b):
                     continue
-                if pair.get("consistent") is False:
+                if pair.get("consistent") is not True:
+                    # без подтверждения обратным порядком предпочтение не считается
+                    unverified_pairs.add(pair_key(a, b))
                     continue
                 pairs += 1
                 if winner == cid:
@@ -482,6 +492,10 @@ def compute(payload: dict) -> dict:
             "family": candidate.get("family", ""),
             "author_slot": candidate.get("author_slot", ""),
         }
+
+    for pair in sorted(unverified_pairs):
+        warnings.append(f"пара {pair.replace(chr(124), chr(45))}: предпочтение не засчитано — "
+                        f"обратный порядок не подтвердил вердикт")
 
     # --- ранжирование: лексикографическое ---
     # Сначала сортировка по cid по возрастанию, потом стабильная сортировка по
