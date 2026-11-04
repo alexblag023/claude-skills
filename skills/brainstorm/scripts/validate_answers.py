@@ -19,25 +19,11 @@ import re
 import sys
 from pathlib import Path
 
-# Признаки самоидентификации: модель, узнавшая себя, выдает автора ревью.
-BLIND_PATTERNS = [
-    r"\bas an ai\b",
-    r"\bi am an ai\b",
-    r"\bi am (?:large language model|llm|ai assistant|assistant)\b",
-    r"\bi.?m (?:gpt|claude|gemini|qwen|llama|mistral|deepseek|kimi|grok)\b",
-    r"\bas (?:gpt|claude|gemini|qwen|llama|mistral|deepseek|kimi|grok)\b",
-    r"\bкак (?:языковая |большая )?модель\b",
-    r"\bя — (?:gpt|claude|gemini|qwen|llama|mistral|deepseek|kimi|grok|ии|ai)\b",
-    r"\bмоя версия\b",
-    r"\bmy model\b",
-    r"\bchatgpt\b",
-    r"\bcopilot\b",
-    r"\bdeepseek[- ]?r1\b",
-    r"\bgpt[- ]?4\b",
-    r"\bclaude[- ]?(?:opus|sonnet|haiku)\b",
-    r"\bgemini[- ]?[0-9]\b",
-    r"\bqwen[0-9.-]*\b",
-]
+try:
+    from blind_rules import find_self_identification
+except ImportError:  # запуск из другого каталога
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from blind_rules import find_self_identification
 
 RUBRIC_KEYS = ("correctness", "ac_coverage", "robustness", "simplicity", "spec_adherence")
 AC_STATUSES = {"pass", "fail", "unknown"}
@@ -205,6 +191,9 @@ def check_critic(data: dict, source: str) -> list[Finding]:
             if _is_str(winner) and winner not in (pair.get("a"), pair.get("b")):
                 findings.append(Finding(source, f"{tag}.winner",
                                              "winner должен совпадать с a или b"))
+            if "consistent" in pair and not isinstance(pair["consistent"], bool):
+                findings.append(Finding(source, f"{tag}.consistent",
+                                             "consistent должен быть true или false"))
     return findings
 
 
@@ -242,15 +231,12 @@ def check_repair(text: str, source: str) -> list[Finding]:
 def check_blind(text: str, source: str) -> list[Finding]:
     """Ищет самоидентификацию модели: она выдает автора ревью."""
     findings: list[Finding] = []
-    lowered = text.lower()
-    for pattern in BLIND_PATTERNS:
-        match = re.search(pattern, lowered)
-        if match:
-            findings.append(Finding(
-                source, "blind.self_identification",
-                f"в тексте есть самоидентификация: {match.group(0)!r}",
-            ))
-            break
+    match = find_self_identification(text)
+    if match:
+        findings.append(Finding(
+            source, "blind.self_identification",
+            f"в тексте есть самоидентификация: {match.group(0)!r}",
+        ))
     return findings
 
 

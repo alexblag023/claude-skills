@@ -11,9 +11,13 @@
     "title": "Выбрать схему хранения событий",
     "spec_path": "spec.md",
     "spec_sha256": "...",
+    "acceptance_path": "acceptance.json",
     "ac_sha256": "...",
+    "public_tests_path": "public_tests",
     "public_tests_sha256": "...",
+    "hidden_tests_path": "hidden_tests",
     "hidden_tests_sha256": "...",
+    "prompts_path": "prompts",
     "prompts_sha256": "...",
     "config_sha256": "...",
     "acceptance": [{"id": "AC-1", "text": "...", "check": "test"}]
@@ -39,6 +43,14 @@
      "sha256": "...", "path": "candidates/C1.md", "valid_format": true}
   ],
   "label_map_sha256": "...",
+  "clusters": {
+    "path": "clusters.json",
+    "sha256": "...",
+    "candidates": 3,
+    "clusters": 3,
+    "diversity_ratio": 1.0,
+    "warnings": []
+  },
   "reviews": [
     {"reviewer_slot": "R2", "reviewer_family": "...", "role": "critic", "cid": "C1",
      "ac_results": {"AC-1": "pass"},

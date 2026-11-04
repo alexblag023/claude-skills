@@ -18,12 +18,11 @@ import re
 import sys
 from pathlib import Path
 
-SELF_ID_RE = re.compile(
-    r"(?:\bas an ai\b|\bi am an ai\b|\bi am (?:a )?(?:large language model|llm)\b"
-    r"|\bкак языковая модель\b|\bchatgpt\b|\bcopilot\b"
-    r"|\bclaude[- ]?(?:opus|sonnet|haiku)\b|\bgpt[- ]?4\b|\bgemini[- ]?[0-9]\b)",
-    re.IGNORECASE,
-)
+try:
+    from blind_rules import find_self_identification
+except ImportError:  # запуск из другого каталога
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from blind_rules import find_self_identification
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -67,23 +66,23 @@ class Report:
 def check_freeze(run_dir: Path, run: dict, report: Report) -> None:
     """Сверяет хэши заморозки с фактическими файлами."""
     task = run.get("task") or {}
+    # Пары (хэш, ключ пути, путь по умолчанию). Путь по умолчанию позволяет
+    # собирать run.json по схеме report-schema.md, не дублируя его вручную.
     checks = [
-        ("spec_sha256", "spec_path"),
-        ("ac_sha256", "acceptance_path"),
-        ("public_tests_sha256", "public_tests_path"),
-        ("hidden_tests_sha256", "hidden_tests_path"),
+        ("spec_sha256", "spec_path", "spec.md"),
+        ("ac_sha256", "acceptance_path", "acceptance.json"),
+        ("public_tests_sha256", "public_tests_path", "public_tests"),
+        ("hidden_tests_sha256", "hidden_tests_path", "hidden_tests"),
+        ("prompts_sha256", "prompts_path", "prompts"),
     ]
-    for hash_key, path_key in checks:
+    for hash_key, path_key, default_relative in checks:
         expected = task.get(hash_key)
-        relative = task.get(path_key)
-        if not expected and not relative:
-            continue
-        if not relative:
-            report.error(f"заморозка: есть {hash_key}, но нет пути {path_key}")
+        relative = task.get(path_key) or default_relative
+        if not expected:
             continue
         target = run_dir / relative
         if not target.exists():
-            report.error(f"заморозка: файл {relative} не найден")
+            report.error(f"заморозка: есть {hash_key}, но файл {relative} не найден")
             continue
         actual = sha256_tree(target) if target.is_dir() else sha256_file(target)
         if actual != expected:
@@ -124,7 +123,11 @@ def check_label_map(run_dir: Path, run: dict, report: Report) -> dict:
     map_path = run_dir / "label_map.json"
     if not map_path.exists():
         # карта могла остаться рядом со слепыми копиями кандидатов
-        map_path = run_dir / "candidates" / "label_map.json"
+        for folder in ("candidates", "blinded"):
+            candidate_map = run_dir / folder / "label_map.json"
+            if candidate_map.exists():
+                map_path = candidate_map
+                break
     if not map_path.exists():
         report.error("нет карты меток label_map.json")
         return slot_by_label
@@ -150,7 +153,7 @@ def check_label_map(run_dir: Path, run: dict, report: Report) -> dict:
             text = blinded.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        match = SELF_ID_RE.search(text)
+        match = find_self_identification(text)
         if match:
             report.error(f"слепота: в {blinded_name} есть самоидентификация {match.group(0)!r}")
     return slot_by_label
@@ -179,7 +182,21 @@ def check_reviews(run: dict, mapping: dict, slot_by_label: dict, report: Report)
             report.error(f"ревью: {reviewer} ({reviewer_family}) ревьюит кандидата своего семейства {cid}")
         counts.setdefault(cid, set()).add(reviewer)
 
-    for cid, reviewers in sorted(counts.items()):
+    # Кандидат без ревью не должен молча пройти гейт: если он в топе — это ошибка,
+    # иначе предупреждение.
+    aggregation = run.get("aggregation") or {}
+    decision = run.get("decision") or {}
+    top = (aggregation.get("ranking") or [None])[0]
+    winner = decision.get("winner_cid")
+    for cid in sorted(mapping):
+        reviewers = counts.get(cid, set())
+        if not reviewers:
+            message = f"кандидат {cid}: ни одного ревью"
+            if cid in (top, winner):
+                report.error(message + " — при этом он в топе ранжирования")
+            else:
+                report.warn(message)
+            continue
         if len(reviewers) < 2:
             report.warn(f"кандидат {cid}: ревьюировал меньше двух независимых моделей")
 
@@ -209,6 +226,24 @@ def check_decision(run: dict, report: Report) -> None:
         report.error("вердикт ACCEPT при REJECT_ALL по агрегации и без override")
     if override:
         report.warn(f"вердикт переопределен вручную: {override}")
+
+
+def check_artifacts(run_dir: Path, run: dict, report: Report) -> None:
+    """Проверяет наличие артефактов прогона, объявленных в SKILL.md."""
+    aggregation = run.get("aggregation") or {}
+    if aggregation and not (run_dir / "aggregation.json").exists():
+        report.warn("в каталоге нет aggregation.json, хотя блок aggregation заполнен")
+    for folder, label in (("reviews", "ревью"), ("verification", "логи проверок")):
+        path = run_dir / folder
+        if path.exists() and not any(path.iterdir()):
+            report.warn(f"каталог {folder} пуст — нет ни одного {label[:-1]}")
+    if (run_dir / "label_map.json").exists():
+        pass
+    clusters = run.get("clusters")
+    if clusters and clusters.get("path") and not (run_dir / clusters["path"]).exists():
+        report.warn("в каталоге нет clusters.json — разнообразие не измерено")
+    if not (run_dir / "report.md").exists():
+        report.warn("нет report.md — отчет для человека еще не собран")
 
 
 def check_integrity(run: dict, report: Report) -> None:
@@ -259,6 +294,7 @@ def main(argv: list[str] | None = None) -> int:
     slot_by_label = check_label_map(run_dir, run, report)
     check_reviews(run, mapping, slot_by_label, report)
     check_decision(run, report)
+    check_artifacts(run_dir, run, report)
     check_integrity(run, report)
 
     if args.json:

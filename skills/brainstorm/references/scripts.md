@@ -16,12 +16,16 @@
 вырезает из текста строки с самоидентификацией модели и пишет карту соответствия
 `label_map.json` с sha256 исходника и слепой копии.
 
-**Читает:** каталог `--candidates` (файлы `.md`, `.txt`, `.json`).
-**Пишет:** каталог `--out`: файлы `C1.md` … `Cn.md` и `label_map.json`.
+**Читает:** каталог `--candidates` (файлы `.md`, `.txt`).
+**Пишет:** каталог `--out`: файлы `C1.md` … `Cn.md`; карта `label_map.json` — в `--out`
+или в `--map-out` (по умолчанию каталог `--out`).
 **Сеть:** нет. **Внешние утилиты:** нет.
 
+Два файла-кандидата с одинаковым именем без расширения — ошибка (код 1): иначе один из
+кандидатов молча потерялся бы.
+
 ```
-python scripts/anonymize.py --candidates candidates/ --out blinded/ --seed 42
+python scripts/anonymize.py --candidates candidates/ --out blinded/ --map-out . --seed 42
 ```
 
 ## `scripts/validate_answers.py`

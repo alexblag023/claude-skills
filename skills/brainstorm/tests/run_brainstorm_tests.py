@@ -219,6 +219,58 @@ def test_aggregate_custom_weights(failed):
         failed.append(f"aggregate: веса не нормализованы: {weights}")
 
 
+def test_aggregate_tie_respects_execution(failed):
+    """Зеленый кандидат не попадает в ничью с упавшим: проверка исполнением разводит их."""
+    data = payload()
+    data["reviews"] = [r for r in data["reviews"] if r["cid"] != "C2"]
+    data["reviews"].append(review("R1", "C2", 4, "f1"))
+    data["reviews"].append(review("R3", "C2", 4, "f3"))
+    data["verification"] = [verification("C1"), verification("C2", 8, 8, compile_ok=False),
+                             verification("C3")]
+    result = agg.compute(data)
+    if result["tie"] is not None:
+        failed.append(f"aggregate: ничья не должна возникать при разном hard_gate: {result['tie']}")
+    if result["ranking"][0] != "C1":
+        failed.append(f"aggregate: проходящий кандидат должен быть первым: {result['ranking']}")
+
+
+def test_aggregate_inconsistent_pair_is_a_draw(failed):
+    """Пара с consistent=false — ничья: она не отнимает голос поддержки у кандидата."""
+    data = payload()
+    for item in data["reviews"]:
+        if item["cid"] == "C1":
+            item["pairwise"] = [{"a": "C1", "b": "C2", "winner": "C2", "consistent": False}]
+    result = agg.compute(data)
+    if result["quorum"]["support_for_winner"] < 2:
+        failed.append(f"aggregate: несогласованная пара не должна отнимать поддержку: {result['quorum']}")
+
+
+def test_aggregate_quorum_from_participants(failed):
+    """Кворум считается от числа участников: исключение кандидата его не ослабляет."""
+    data = payload()
+    data["config"] = {"n_authors": 4}
+    data["reviews"] = [r for r in data["reviews"] if r["cid"] != "C3"]
+    result = agg.compute(data)
+    if result["quorum"]["required"] != 3:
+        failed.append(f"aggregate: кворум должен считаться от 4 участников: {result['quorum']}")
+
+
+def test_aggregate_rejects_wrong_types(failed):
+    """Кривой вход дает InputError, а не трейсбек."""
+    for broken in ({"reviews": ["x"]}, {"reviews": [], "verification": ["x"]},
+                  {"reviews": [], "reliability": {"R1": 5}},
+                  {"reviews": [], "config": {"rubric_weights": {"correctness": True}}}):
+        broken.setdefault("candidates", [])
+        try:
+            agg.compute(broken)
+        except agg.InputError:
+            continue
+        except Exception as exc:  # noqa: BLE001
+            failed.append(f"aggregate: {type(exc).__name__} вместо InputError для {broken}")
+            continue
+        failed.append(f"aggregate: кривой вход принят: {broken}")
+
+
 def test_validate_author(failed):
     """Схема роли author: обязательные поля и диапазон confidence."""
     good = json.dumps({"solution": "решение", "assumptions": [], "self_tests": [],
@@ -423,6 +475,8 @@ def main() -> int:
         test_aggregate_no_quorum, test_aggregate_tie, test_aggregate_reject_all,
         test_aggregate_degraded, test_aggregate_bad_input, test_aggregate_weight_cap,
         test_aggregate_missing_rubric_warns, test_aggregate_custom_weights,
+        test_aggregate_tie_respects_execution, test_aggregate_inconsistent_pair_is_a_draw,
+        test_aggregate_quorum_from_participants, test_aggregate_rejects_wrong_types,
         test_validate_author, test_validate_critic,
         test_validate_json_extraction, test_validate_blind, test_validate_repair,
         test_anonymize, test_dedup, test_check_run_ok,

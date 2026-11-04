@@ -214,17 +214,31 @@ def prefilter(candidates, reviews, verification) -> list[dict]:
     excluded: list[dict] = []
     for candidate in candidates:
         cid = str(candidate.get("cid") or "")
-        crit_by_fp: dict[str, set] = defaultdict(set)
+        crit: dict[str, dict] = {}
         for position, review in enumerate(by_cid.get(cid, [])):
             reviewer = str(review.get("reviewer_slot") or review.get("reviewer") or "")
             if not reviewer:
                 # без слота ревьюера два отдельных отзыва все равно считаются
                 # двумя независимыми свидетельствами, а не одним
                 reviewer = f"__unlabelled_{position}"
+            family = str(review.get("reviewer_family") or "")
             for defect in review.get("defects") or []:
-                if is_critical(defect):
-                    crit_by_fp[defect_fingerprint(defect)].add(reviewer)
-        confirmed = sorted(fp for fp, who in crit_by_fp.items() if len(who) >= 2)
+                if not is_critical(defect):
+                    continue
+                info = crit.setdefault(defect_fingerprint(defect), {"reviewers": {}, "acs": set()})
+                info["reviewers"][reviewer] = family
+                ac = str(defect.get("ac") or "")
+                if ac:
+                    info["acs"].add(ac)
+        confirmed = []
+        for fingerprint, info in crit.items():
+            slots = len(info["reviewers"])
+            families = {fam for fam in info["reviewers"].values() if fam}
+            # независимость = разные семейства; если семейства не указаны,
+            # достаточно двух разных слотов ревьюера
+            if slots >= 2 and (not families or len(families) >= 2):
+                confirmed.append(fingerprint)
+        confirmed.sort()
         if confirmed:
             excluded.append({
                 "cid": cid,
@@ -232,14 +246,21 @@ def prefilter(candidates, reviews, verification) -> list[dict]:
                 "fingerprints": confirmed,
             })
             continue
-        unconfirmed = sorted(fp for fp in crit_by_fp)
-        if unconfirmed:
+        if crit:
             failed = failing_checks(vmap.get(cid))
-            if failed:
+            matched: list[tuple[str, list[str]]] = []
+            for fingerprint, info in crit.items():
+                hits = [f"ac:{ac}" for ac in sorted(info["acs"]) if f"ac:{ac}" in failed]
+                if hits:
+                    matched.append((fingerprint, hits))
+                elif not info["acs"] and failed:
+                    # дефект без ac: подходит любая непройденная проверка
+                    matched.append((fingerprint, failed))
+            if matched:
                 excluded.append({
                     "cid": cid,
                     "reason": "критический дефект одного ревьюера плюс провал проверки",
-                    "fingerprints": unconfirmed,
+                    "fingerprints": sorted(fp for fp, _ in matched),
                     "failed_checks": failed,
                 })
     return excluded
@@ -259,13 +280,60 @@ def supports(review: dict, cid: str, others: list[str]) -> bool:
         winner = str(pair.get("winner") or "")
         if cid not in (a, b):
             continue
+        if pair.get("consistent") is False:
+            # вердикт изменился при смене порядка — пара считается ничьей
+            continue
         other = b if cid == a else a
         if other in others and winner == other:
             return False
     return True
 
 
+def validate_payload(payload: dict) -> None:
+    """Проверяет типы входа.
+
+    Некорректный вход обязан давать код возврата 1 с понятным сообщением, а не
+    трейсбек: скрипт — гвард, а не отладчик.
+    """
+    candidates = _require(payload, "candidates", list)
+    reviews = _require(payload, "reviews", list)
+    for index, candidate in enumerate(candidates):
+        if not isinstance(candidate, dict):
+            raise InputError(f"candidates[{index}] должен быть объектом")
+    for index, review in enumerate(reviews):
+        if not isinstance(review, dict):
+            raise InputError(f"reviews[{index}] должен быть объектом")
+        for key in ("defects", "pairwise"):
+            value = review.get(key)
+            if value is None:
+                continue
+            if not isinstance(value, list):
+                raise InputError(f"reviews[{index}].{key} должен быть списком")
+            for sub, item in enumerate(value):
+                if not isinstance(item, dict):
+                    raise InputError(f"reviews[{index}].{key}[{sub}] должен быть объектом")
+        rubric = review.get("rubric")
+        if rubric is not None and not isinstance(rubric, dict):
+            raise InputError(f"reviews[{index}].rubric должен быть объектом")
+    verification = payload.get("verification") or []
+    if not isinstance(verification, list):
+        raise InputError("поле verification должно быть списком")
+    for index, item in enumerate(verification):
+        if not isinstance(item, dict):
+            raise InputError(f"verification[{index}] должен быть объектом")
+    reliability = payload.get("reliability") or {}
+    if not isinstance(reliability, dict):
+        raise InputError("поле reliability должно быть объектом")
+    for slot, history in reliability.items():
+        if not isinstance(history, dict):
+            raise InputError(f"reliability[{slot!r}] должен быть объектом")
+    config = payload.get("config") or {}
+    if not isinstance(config, dict):
+        raise InputError("поле config должно быть объектом")
+
+
 def compute(payload: dict) -> dict:
+    validate_payload(payload)
     candidates = _require(payload, "candidates", list)
     reviews = _require(payload, "reviews", list)
     verification = payload.get("verification") or []
@@ -284,7 +352,7 @@ def compute(payload: dict) -> dict:
         for key, value in custom.items():
             if key not in weights:
                 raise InputError(f"в rubric_weights неизвестный критерий {key!r}")
-            if not isinstance(value, (int, float)) or value < 0:
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
                 raise InputError(f"некорректный вес {key!r}")
         total = sum(float(v) for v in custom.values())
         if total <= 0:
@@ -416,19 +484,28 @@ def compute(payload: dict) -> dict:
         }
 
     # --- ранжирование: лексикографическое ---
+    # Сначала сортировка по cid по возрастанию, потом стабильная сортировка по
+    # ключам в обратном порядке: при полном равенстве меток порядок остается
+    # алфавитным и воспроизводимым.
+    by_cid_asc = sorted(scores.items(), key=lambda item: item[0])
     ranking = sorted(
-        scores.items(),
-        key=lambda item: (item[1]["hard_gate"], item[1]["hidden_ratio"], item[1]["S"], item[0]),
+        by_cid_asc,
+        key=lambda item: (item[1]["hard_gate"], item[1]["hidden_ratio"], item[1]["S"]),
         reverse=True,
     )
     ranking_ids = [cid for cid, _ in ranking]
 
     # --- голосование по рубрике (для dissent) ---
-    by_votes = sorted(scores.items(), key=lambda item: (item[1]["S"], item[0]), reverse=True)
+    by_votes = sorted(by_cid_asc, key=lambda item: item[1]["S"], reverse=True)
     vote_winner = by_votes[0][0] if by_votes else ""
 
     # --- кворум ---
-    n = len(alive)
+    # Кворум считается от числа УЧАСТНИКОВ, а не от числа выживших кандидатов:
+    # исключение кандидата не должно ослаблять требование.
+    participants = config.get("n_authors") or config.get("n_participants")
+    if isinstance(participants, bool) or not isinstance(participants, int) or participants <= 0:
+        participants = len(alive)
+    n = participants
     required = n // 2 + 1
     all_ids = [str(c.get("cid")) for c in alive]
     support_counts: dict[str, int] = {cid: 0 for cid in all_ids}
@@ -456,7 +533,10 @@ def compute(payload: dict) -> dict:
         first, second = ranking_ids[0], ranking_ids[1]
         delta = abs(scores[first]["S"] - scores[second]["S"])
         same_hidden = scores[first]["hidden_ratio"] == scores[second]["hidden_ratio"]
-        if delta < float(delta_tie) and same_hidden:
+        same_gate = scores[first]["hard_gate"] == scores[second]["hard_gate"]
+        # проверка исполнением разводит кандидатов раньше сравнения оценок:
+        # зеленый кандидат не может оказаться в ничьей с упавшим
+        if delta < float(delta_tie) and same_hidden and same_gate:
             tie = {
                 "cids": [first, second],
                 "delta_S": round(delta, 4),
