@@ -95,6 +95,61 @@ def check_freeze(run_dir: Path, run: dict, report: Report) -> None:
             report.error("заморозка: хэш конфигурации не совпадает — состав участников или лимиты менялись")
 
 
+def check_recon(run_dir: Path, run: dict, report: Report) -> None:
+    """Проверяет общую картину: заморожена, зоны закрыты, пропуск объяснён.
+
+    Картина (context.md) — общий вход всех участников. Если она изменилась после
+    заморозки, сравнивать решения нечестно; если зона не закрыта, участники решали
+    по догадкам; если пропуск не объяснён, прогон неполон.
+    """
+    recon = run.get("recon")
+    if recon is None:
+        report.error("в run.json нет блока recon — разведка картины не зафиксирована")
+        return
+    if not isinstance(recon, dict):
+        report.error("блок recon должен быть объектом")
+        return
+    if recon.get("skipped"):
+        reason = recon.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            report.error("recon пропущен, но причина не указана")
+        return
+
+    task = run.get("task") or {}
+    relative = task.get("context_path") or "context.md"
+    target = run_dir / relative
+    if not target.exists():
+        report.error(f"разведка: нет картины {relative}")
+        return
+    expected = task.get("context_sha256")
+    if not expected:
+        report.error("разведка: не зафиксирован context_sha256 — картина не заморожена")
+        return
+    actual = sha256_file(target)
+    if actual != expected:
+        report.error(f"разведка: хэш {relative} не совпадает ({actual[:16]} != {expected[:16]})")
+
+    zones = recon.get("zones")
+    if not isinstance(zones, list) or not zones:
+        report.error("разведка: не заявлены зоны (recon.zones)")
+        return
+    text = target.read_text(encoding="utf-8", errors="replace")
+    for zone in zones:
+        name = str(zone.get("name") if isinstance(zone, dict) else zone)
+        if not name.strip():
+            report.error("разведка: зона без имени")
+            continue
+        marker = re.search(r"^#{1,6}\s+" + re.escape(name) + r"\s*$", text, re.MULTILINE)
+        if not marker:
+            report.error(f"разведка: в картине нет раздела зоны {name!r}")
+            continue
+        tail = text[marker.end():]
+        nxt = re.search(r"^#{1,6}\s+", tail, re.MULTILINE)
+        body = tail[: nxt.start()] if nxt else tail
+        if not body.strip():
+            report.error(f"разведка: раздел зоны {name!r} пуст — зона не закрыта")
+
+
 def check_candidates(run_dir: Path, run: dict, report: Report) -> dict:
     """Проверяет кандидатов и строит карту метка -> автор."""
     mapping: dict[str, dict] = {}
@@ -281,7 +336,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     report = Report()
-    for key in ("task", "config", "candidates", "decision"):
+    for key in ("task", "config", "candidates", "decision", "recon"):
         if key not in run:
             report.error(f"в run.json нет обязательного поля {key!r}")
     if report.errors:
@@ -290,6 +345,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     check_freeze(run_dir, run, report)
+    check_recon(run_dir, run, report)
     mapping = check_candidates(run_dir, run, report)
     slot_by_label = check_label_map(run_dir, run, report)
     check_reviews(run, mapping, slot_by_label, report)

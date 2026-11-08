@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """validate_answers.py — проверка формата ответов внешних моделей.
 
-Роли: author (решение), critic (ревью), judge (сравнение/эскалация), repair (починка).
+Роли: recon (разведка), author (решение), critic (ревью), judge (сравнение/эскалация), repair (починка).
 
 Запуск:
+  python validate_answers.py --role recon FILE [FILE ...]
   python validate_answers.py --role author FILE [FILE ...]
   python validate_answers.py --role critic --dir reviews/
   python validate_answers.py --role critic --check-blind FILE
@@ -197,6 +198,46 @@ def check_critic(data: dict, source: str) -> list[Finding]:
     return findings
 
 
+def check_recon(data: dict, source: str) -> list[Finding]:
+    """Схема роли recon: факты с доказательством, пробелы знания и риски.
+
+    Разведка собирает картину, а не решение: каждая находка обязана указывать
+    место (файл:строка) и доказательство. Находка без места — не факт, а мнение.
+    """
+    findings: list[Finding] = []
+    facts = data.get("facts")
+    if not isinstance(facts, list) or not facts:
+        findings.append(Finding(source, "recon.facts",
+                                     "поле facts обязательно и непустое"))
+    else:
+        for index, fact in enumerate(facts):
+            if not isinstance(fact, dict):
+                findings.append(Finding(source, f"recon.facts[{index}]",
+                                             "находка должна быть объектом"))
+                continue
+            location = fact.get("location")
+            if not _is_str(location) or not location.strip():
+                findings.append(Finding(source, f"recon.facts[{index}].location",
+                                             "у находки обязателен location (файл:строка)"))
+            elif not re.search(r":\d+", location):
+                findings.append(Finding(source, f"recon.facts[{index}].location",
+                                             f"location должен содержать номер строки: {location!r}"))
+            claim = fact.get("claim")
+            if not _is_str(claim) or not claim.strip():
+                findings.append(Finding(source, f"recon.facts[{index}].claim",
+                                             "у находки обязателен claim"))
+            evidence = fact.get("evidence")
+            if not _is_str(evidence) or not evidence.strip():
+                findings.append(Finding(source, f"recon.facts[{index}].evidence",
+                                             "у находки обязательно evidence"))
+    for key in ("unknowns", "risks"):
+        if key not in data:
+            findings.append(Finding(source, f"recon.{key}", f"нет поля {key}"))
+        elif not _is_str_list(data[key]):
+            findings.append(Finding(source, f"recon.{key}", f"поле {key} должно быть списком строк"))
+    return findings
+
+
 def check_judge(data: dict, source: str) -> list[Finding]:
     """Схема роли judge: победитель, решающий довод, риск проигравшего."""
     findings: list[Finding] = []
@@ -259,7 +300,9 @@ def validate_text(role: str, text: str, source: str, check_blind_mode: bool) -> 
     if not isinstance(data, dict):
         findings.append(Finding(source, f"{role}.json", "ожидался JSON-объект"))
         return findings
-    if role == "author":
+    if role == "recon":
+        findings.extend(check_recon(data, source))
+    elif role == "author":
         findings.extend(check_author(data, source))
     elif role == "critic":
         findings.extend(check_critic(data, source))
@@ -299,7 +342,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("files", nargs="*", help="файлы с ответами")
     parser.add_argument("--role", required=True,
-                        choices=["author", "critic", "judge", "repair"],
+                        choices=["recon", "author", "critic", "judge", "repair"],
                         help="роль, по схеме которой проверяем ответ")
     parser.add_argument("--dir", help="каталог с ответами (рекурсивно)")
     parser.add_argument("--check-blind", action="store_true",

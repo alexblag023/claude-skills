@@ -471,15 +471,25 @@ def build_run(base: Path) -> dict:
     (base / "candidates" / "C2.md").write_text("решение два\n", encoding="utf-8")
     spec = base / "spec.md"
     spec.write_text("спека\n", encoding="utf-8")
+    context = base / "context.md"
+    context.write_text(
+        "# Картина задачи\n\n"
+        "## Карта кода\n\nТочка входа: backend/app.py:42.\n\n"
+        "## Контракты\n\nКонтракт API: backend/api.py:10.\n",
+        encoding="utf-8")
     config = {"n_authors": 3, "max_calls": 16, "delta_tie": 0.05}
     run = {
         "schema_version": "1.0",
         "task": {
             "title": "тест", "spec_path": "spec.md",
             "spec_sha256": chk.sha256_file(spec),
+            "context_path": "context.md",
+            "context_sha256": chk.sha256_file(context),
             "config_sha256": chk.sha256_canonical(config),
         },
         "config": config,
+        "recon": {"skipped": False,
+                 "zones": [{"name": "Карта кода"}, {"name": "Контракты"}]},
         "roster": [
             {"slot": "A1", "family": "f1"}, {"slot": "A2", "family": "f2"},
             {"slot": "R1", "family": "f3"}, {"slot": "R2", "family": "f4"},
@@ -545,6 +555,114 @@ def test_check_run_requires_quorum(failed):
             failed.append("check_run: вердикт без кворума должен давать ненулевой код")
 
 
+def build_context(base: Path) -> Path:
+    """Картина задачи: два закрытых раздела."""
+    context = base / "context.md"
+    context.write_text(
+        "# Картина задачи\n\n"
+        "## Карта кода\n\nТочка входа: backend/app.py:42.\n\n"
+        "## Контракты\n\nКонтракт API: backend/api.py:10.\n",
+        encoding="utf-8")
+    return context
+
+
+def test_validate_recon(failed):
+    """Факт без места или без доказательства - не факт."""
+    with tempfile.TemporaryDirectory() as tmp:
+        good = Path(tmp) / "good.json"
+        good.write_text(json.dumps({
+            "facts": [{"location": "app.py:12", "claim": "вход HTTP", "evidence": "строка 12"}],
+            "unknowns": ["схема БД не найдена"], "risks": ["гонка при перезапуске"],
+        }, ensure_ascii=False), encoding="utf-8")
+        findings = val.validate_text("recon", good.read_text(encoding="utf-8"), "good", False)
+        if findings:
+            failed.append(f"validate: корректный ответ recon должен проходить: {findings}")
+
+        bad = Path(tmp) / "bad.json"
+        bad.write_text(json.dumps({
+            "facts": [{"location": "app.py", "claim": "вход HTTP", "evidence": ""}],
+            "unknowns": "не список",
+        }, ensure_ascii=False), encoding="utf-8")
+        findings = val.validate_text("recon", bad.read_text(encoding="utf-8"), "bad", False)
+        rules = {f.rule for f in findings}
+        if not any(r.startswith("recon.facts[0].location") for r in rules):
+            failed.append("validate: location без номера строки должен ловиться")
+        if not any(r.startswith("recon.facts[0].evidence") for r in rules):
+            failed.append("validate: пустой evidence должен ловиться")
+        if "recon.unknowns" not in rules:
+            failed.append("validate: неизвестный тип unknowns должен ловиться")
+
+
+def test_check_run_requires_recon(failed):
+    """Прогон без блока recon - неполон."""
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        run = build_run(base)
+        run.pop("recon", None)
+        (base / "run.json").write_text(json.dumps(run, ensure_ascii=False), encoding="utf-8")
+        code = run_script("check_run.py", [str(base)], base)
+        if code == 0:
+            failed.append("check_run: прогон без recon должен давать ненулевой код")
+
+
+def test_check_run_recon_ok(failed):
+    """Закрытые зоны и замороженная картина проходят проверку."""
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        run = build_run(base)
+        context = build_context(base)
+        run["task"]["context_path"] = "context.md"
+        run["task"]["context_sha256"] = chk.sha256_file(context)
+        run["recon"] = {"skipped": False,
+                        "zones": [{"name": "Карта кода"}, {"name": "Контракты"}]}
+        (base / "run.json").write_text(json.dumps(run, ensure_ascii=False), encoding="utf-8")
+        code = run_script("check_run.py", [str(base)], base)
+        if code != 0:
+            failed.append("check_run: корректная картина должна проходить")
+
+
+def test_check_run_recon_detects_tampering(failed):
+    """Измененная картина и незакрытая зона - ошибки."""
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        run = build_run(base)
+        context = build_context(base)
+        run["task"]["context_path"] = "context.md"
+        run["task"]["context_sha256"] = chk.sha256_file(context)
+        run["recon"] = {"skipped": False,
+                        "zones": [{"name": "Карта кода"}, {"name": "Контракты"}]}
+        context.write_text("# Картина задачи\n\n## Карта кода\n\nподмена\n", encoding="utf-8")
+        (base / "run.json").write_text(json.dumps(run, ensure_ascii=False), encoding="utf-8")
+        code = run_script("check_run.py", [str(base)], base)
+        if code == 0:
+            failed.append("check_run: подмена картины должна давать ненулевой код")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        run = build_run(base)
+        context = build_context(base)
+        run["task"]["context_path"] = "context.md"
+        run["task"]["context_sha256"] = chk.sha256_file(context)
+        run["recon"] = {"skipped": False,
+                        "zones": [{"name": "Карта кода"}, {"name": "Данные"}]}
+        (base / "run.json").write_text(json.dumps(run, ensure_ascii=False), encoding="utf-8")
+        code = run_script("check_run.py", [str(base)], base)
+        if code == 0:
+            failed.append("check_run: незакрытая зона должна давать ненулевой код")
+
+
+def test_check_run_recon_skip_requires_reason(failed):
+    """Пропуск разведки без причины - ошибка."""
+    with tempfile.TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        run = build_run(base)
+        run["recon"] = {"skipped": True, "reason": ""}
+        (base / "run.json").write_text(json.dumps(run, ensure_ascii=False), encoding="utf-8")
+        code = run_script("check_run.py", [str(base)], base)
+        if code == 0:
+            failed.append("check_run: пропуск разведки без причины должен давать ненулевой код")
+
+
 def main() -> int:
     failed = []
     tests = [
@@ -561,6 +679,8 @@ def main() -> int:
         test_validate_author, test_validate_critic,
         test_validate_json_extraction, test_validate_blind, test_validate_repair,
         test_anonymize, test_dedup, test_check_run_ok,
+        test_validate_recon, test_check_run_requires_recon, test_check_run_recon_ok,
+        test_check_run_recon_detects_tampering, test_check_run_recon_skip_requires_reason,
         test_check_run_detects_tampering, test_check_run_requires_quorum,
     ]
     for test in tests:
