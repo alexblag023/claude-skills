@@ -1,0 +1,6 @@
+# GPT route in the source matrix: backup.
+name = "audit"
+description = "Audit the assigned scope against explicit criteria and report evidenced findings."
+model = "gpt-6.1-terra"
+model_reasoning_effort = "medium"
+developer_instructions = "Audit the assigned scope against explicit criteria and report evidenced findings. Follow the parent agent's scope and return the requested deliverable."

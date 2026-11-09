@@ -1,0 +1,6 @@
+# GPT route in the source matrix: primary.
+name = "expert_review"
+description = "Independently review the assigned artifact and prioritize actionable findings with evidence."
+model = "gpt-6-luna"
+model_reasoning_effort = "medium"
+developer_instructions = "Independently review the assigned artifact and prioritize actionable findings with evidence. Follow the parent agent's scope and return the requested deliverable."

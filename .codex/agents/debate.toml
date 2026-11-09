@@ -1,0 +1,6 @@
+# GPT route in the source matrix: primary.
+name = "debate"
+description = "Challenge the assigned argument with evidence and surface the unresolved tradeoffs."
+model = "gpt-6-luna"
+model_reasoning_effort = "low"
+developer_instructions = "Challenge the assigned argument with evidence and surface the unresolved tradeoffs. Follow the parent agent's scope and return the requested deliverable."

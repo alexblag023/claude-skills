@@ -1,0 +1,6 @@
+# GPT route in the source matrix: primary.
+name = "gather"
+description = "Collect the requested evidence within scope and return source references."
+model = "gpt-6-luna"
+model_reasoning_effort = "medium"
+developer_instructions = "Collect the requested evidence within scope and return source references. Follow the parent agent's scope and return the requested deliverable."

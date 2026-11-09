@@ -1,0 +1,6 @@
+# GPT route in the source matrix: backup.
+name = "source_synthesis"
+description = "Synthesize the supplied sources and preserve attribution and disagreements."
+model = "gpt-6-luna"
+model_reasoning_effort = "low"
+developer_instructions = "Synthesize the supplied sources and preserve attribution and disagreements. Follow the parent agent's scope and return the requested deliverable."

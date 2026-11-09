@@ -1,0 +1,6 @@
+# GPT route in the source matrix: backup.
+name = "verify"
+description = "Verify the assigned claim or outcome against the stated acceptance criteria."
+model = "gpt-6-luna"
+model_reasoning_effort = "low"
+developer_instructions = "Verify the assigned claim or outcome against the stated acceptance criteria. Follow the parent agent's scope and return the requested deliverable."

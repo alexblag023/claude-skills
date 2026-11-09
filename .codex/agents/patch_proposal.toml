@@ -1,0 +1,6 @@
+# GPT route in the source matrix: backup.
+name = "patch_proposal"
+description = "Propose a narrowly scoped patch and specify how to verify it."
+model = "gpt-6.1-terra"
+model_reasoning_effort = "medium"
+developer_instructions = "Propose a narrowly scoped patch and specify how to verify it. Follow the parent agent's scope and return the requested deliverable."

@@ -1,0 +1,6 @@
+# GPT route in the source matrix: primary.
+name = "doc_digest"
+description = "Summarize the supplied documents and preserve key facts, decisions and open items."
+model = "gpt-6-luna"
+model_reasoning_effort = "low"
+developer_instructions = "Summarize the supplied documents and preserve key facts, decisions and open items. Follow the parent agent's scope and return the requested deliverable."

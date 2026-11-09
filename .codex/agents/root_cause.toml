@@ -1,0 +1,6 @@
+# GPT route in the source matrix: primary.
+name = "root_cause"
+description = "Investigate the symptom and distinguish demonstrated causes from hypotheses."
+model = "gpt-6-luna"
+model_reasoning_effort = "low"
+developer_instructions = "Investigate the symptom and distinguish demonstrated causes from hypotheses. Follow the parent agent's scope and return the requested deliverable."

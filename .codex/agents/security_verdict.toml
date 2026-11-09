@@ -1,0 +1,6 @@
+# GPT route in the source matrix: backup.
+name = "security_verdict"
+description = "Assess the assigned security finding and cite evidence for the verdict."
+model = "gpt-6-luna"
+model_reasoning_effort = "high"
+developer_instructions = "Assess the assigned security finding and cite evidence for the verdict. Follow the parent agent's scope and return the requested deliverable."

@@ -1,0 +1,6 @@
+# GPT route in the source matrix: primary.
+name = "deep_code_explain"
+description = "Trace the code path and explain behavior, invariants and edge cases with references."
+model = "gpt-6-luna"
+model_reasoning_effort = "medium"
+developer_instructions = "Trace the code path and explain behavior, invariants and edge cases with references. Follow the parent agent's scope and return the requested deliverable."

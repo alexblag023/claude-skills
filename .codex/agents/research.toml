@@ -1,0 +1,6 @@
+# GPT route in the source matrix: primary.
+name = "research"
+description = "Investigate the assigned question and report sourced findings and open questions."
+model = "gpt-6-luna"
+model_reasoning_effort = "medium"
+developer_instructions = "Investigate the assigned question and report sourced findings and open questions. Follow the parent agent's scope and return the requested deliverable."

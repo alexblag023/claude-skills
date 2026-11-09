@@ -1,0 +1,6 @@
+# GPT route in the source matrix: backup.
+name = "bulk_process"
+description = "Apply the requested repeatable operation to each item and account for every result."
+model = "gpt-6.1-sol"
+model_reasoning_effort = "low"
+developer_instructions = "Apply the requested repeatable operation to each item and account for every result. Follow the parent agent's scope and return the requested deliverable."

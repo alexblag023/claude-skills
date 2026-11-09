@@ -1,0 +1,6 @@
+# GPT route in the source matrix: primary.
+name = "release_note"
+description = "Write release notes from the supplied changes and verified user-visible effects."
+model = "gpt-6-luna"
+model_reasoning_effort = "high"
+developer_instructions = "Write release notes from the supplied changes and verified user-visible effects. Follow the parent agent's scope and return the requested deliverable."

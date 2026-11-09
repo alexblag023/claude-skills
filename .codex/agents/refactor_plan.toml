@@ -1,0 +1,6 @@
+# GPT route in the source matrix: backup.
+name = "refactor_plan"
+description = "Plan a behavior-preserving refactor with sequencing, invariants and verification."
+model = "gpt-6-luna"
+model_reasoning_effort = "high"
+developer_instructions = "Plan a behavior-preserving refactor with sequencing, invariants and verification. Follow the parent agent's scope and return the requested deliverable."

@@ -1,0 +1,6 @@
+# GPT route in the source matrix: primary.
+name = "draft"
+description = "Draft the requested text from the supplied facts and editorial constraints."
+model = "gpt-6-luna"
+model_reasoning_effort = "medium"
+developer_instructions = "Draft the requested text from the supplied facts and editorial constraints. Follow the parent agent's scope and return the requested deliverable."

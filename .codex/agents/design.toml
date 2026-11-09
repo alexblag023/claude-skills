@@ -1,0 +1,6 @@
+# GPT route in the source matrix: backup.
+name = "design"
+description = "Develop a design within the supplied requirements and explain decisions and tradeoffs."
+model = "gpt-6-luna"
+model_reasoning_effort = "max"
+developer_instructions = "Develop a design within the supplied requirements and explain decisions and tradeoffs. Follow the parent agent's scope and return the requested deliverable."

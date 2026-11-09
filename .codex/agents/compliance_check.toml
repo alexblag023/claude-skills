@@ -1,0 +1,6 @@
+# GPT route in the source matrix: backup.
+name = "compliance_check"
+description = "Check each supplied requirement and cite evidence or identify missing evidence."
+model = "gpt-6-luna"
+model_reasoning_effort = "low"
+developer_instructions = "Check each supplied requirement and cite evidence or identify missing evidence. Follow the parent agent's scope and return the requested deliverable."

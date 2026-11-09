@@ -1,0 +1,6 @@
+# GPT route in the source matrix: backup.
+name = "classify"
+description = "Classify supplied items using the caller's allowed labels and explain ambiguous cases."
+model = "gpt-6-luna"
+model_reasoning_effort = "max"
+developer_instructions = "Classify supplied items using the caller's allowed labels and explain ambiguous cases. Follow the parent agent's scope and return the requested deliverable."

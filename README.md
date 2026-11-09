@@ -21,6 +21,34 @@ git clone https://github.com/alexblag023/claude-skills.git
 cp -r claude-skills/skills/security-scanner ~/.claude/skills/
 ```
 
+## Маршрутизация субагентов Codex
+
+В [профилях Codex](.codex/agents/) закреплены 24 пары «модель GPT и уровень
+рассуждения» из матрицы делегирования от 9 ноября 2026 года. Комментарий
+в каждом TOML отмечает место GPT в исходной матрице: `primary` или `backup`.
+Оба варианта задают одну модель для роли в Codex. Профили загружаются
+штатным механизмом Codex, поэтому отдельный роутер для выбора модели
+после выбора роли не нужен.
+
+Для использования в другом проекте скопируйте TOML-файлы в его
+`.codex/agents/` и откройте новую сессию Codex в доверенном проекте.
+Если в проекте уже есть одноимённые профили, сначала сравните их.
+В поручении можно назвать роль, например `expert_review`, и попросить
+делегировать ей ревью. Используйте имя из поля `name`. Профили охватывают
+канонические роли матрицы. Для ошибок запуска Codex сообщает о сбое,
+а межпровайдерный резерв остаётся в исходном роутере.
+
+Для живой проверки запустите из репозитория:
+
+```powershell
+codex exec --json -s read-only 'Spawn three custom agents by role: architecture, audit, and expert_review. Use no model or effort overrides. Ask each to return exactly ROUTE_SMOKE followed by a space and its role name, without using tools. Wait for all three.'
+python scripts/itest_codex_delegation.py "$sessionDay" "$parentThreadId"
+```
+
+В `$sessionDay` укажите дневную папку из `~/.codex/sessions/`, а
+в `$parentThreadId` запишите идентификатор из события `thread.started`. Проверка читает
+дочерние журналы и сверяет роль, модель, effort и контрольный ответ.
+
 ## Структура репозитория
 ```
 skills/<имя-скилла>/     # каждый скилл — отдельный каталог: SKILL.md, references/, scripts/

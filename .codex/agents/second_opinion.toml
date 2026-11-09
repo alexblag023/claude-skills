@@ -1,0 +1,6 @@
+# GPT route in the source matrix: primary.
+name = "second_opinion"
+description = "Provide an independent assessment of the supplied issue and its evidence."
+model = "gpt-6-luna"
+model_reasoning_effort = "medium"
+developer_instructions = "Provide an independent assessment of the supplied issue and its evidence. Follow the parent agent's scope and return the requested deliverable."

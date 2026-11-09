@@ -1,0 +1,6 @@
+# GPT route in the source matrix: backup.
+name = "log_triage"
+description = "Trace symptoms in the supplied logs and identify the relevant events and next checks."
+model = "gpt-6-luna"
+model_reasoning_effort = "max"
+developer_instructions = "Trace symptoms in the supplied logs and identify the relevant events and next checks. Follow the parent agent's scope and return the requested deliverable."

@@ -1,0 +1,6 @@
+# GPT route in the source matrix: backup.
+name = "architecture"
+description = "Evaluate architectural options and document constraints, tradeoffs and migration risks."
+model = "gpt-6.1-sol"
+model_reasoning_effort = "high"
+developer_instructions = "Evaluate architectural options and document constraints, tradeoffs and migration risks. Follow the parent agent's scope and return the requested deliverable."
