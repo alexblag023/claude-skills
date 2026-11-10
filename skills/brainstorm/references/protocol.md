@@ -102,6 +102,10 @@ Sanity-проверка: на заглушке (`raise NotImplementedError`) в�
 - `public_tests_sha256`, `hidden_tests_sha256`;
 - `prompts_sha256` — шаблоны промптов;
 - `config_sha256` — состав участников, модели, temperature, лимиты, `max_repair_rounds`, `seed`.
+- `roster` — панель участников: слот, роль, модель, семейство, канал, статус.
+  Базовый состав: `openai-codex/gpt-6.1-sol` (GPT), `commandcode-claude/claude-sonnet-5-5` (Claude),
+  `commandcode/meta/muse-spark-1.3` (Meta) — три разных семейства. Отклонение от базового
+  состава допускается только по недоступности модели; причина замены пишется в `warnings`.
 
 Перед VERIFY и перед REPORT хэши сверяются повторно. Любое изменение дает новый хэш, полный
 перепрогон всех кандидатов и пометку `freeze_ok=false` в отчете.
